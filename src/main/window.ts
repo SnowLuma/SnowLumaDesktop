@@ -17,7 +17,7 @@ export function createMainWindow(): BrowserWindow {
     autoHideMenuBar: true,
     backgroundColor: '#0b1220',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: join(__dirname, '../preload/index.cjs'),
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,

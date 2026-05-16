@@ -44,6 +44,20 @@ const sharedAlias = {
 // Desktop's bundle. TS types still resolve via tsconfig `paths` for IDE
 // autocomplete against source.
 
+// Force CJS output for main + preload. Electron's `electron` module is
+// CJS and exposes a context-dependent surface (ipcMain in main only,
+// ipcRenderer in renderer/preload only). An ESM `import { ipcRenderer }
+// from 'electron'` is checked statically and fails on the side where
+// that name isn't exported — crashed packaged builds with:
+//   "SyntaxError: ... does not provide an export named 'ipcRenderer'"
+// CJS `const { ipcRenderer } = require('electron')` just yields undefined
+// for missing names, which is what the trpc bridge / electron-toolkit
+// actually expect at runtime.
+const cjsOutput = {
+  format: 'cjs' as const,
+  entryFileNames: '[name].cjs',
+};
+
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin({ include: ['electron'] })],
@@ -52,6 +66,7 @@ export default defineConfig({
       rollupOptions: {
         input: resolve(root, 'src/main/index.ts'),
         external: externalMatcher,
+        output: cjsOutput,
       },
     },
     resolve: {
@@ -68,6 +83,7 @@ export default defineConfig({
       rollupOptions: {
         input: resolve(root, 'src/preload/index.ts'),
         external: externalMatcher,
+        output: cjsOutput,
       },
     },
     resolve: {
