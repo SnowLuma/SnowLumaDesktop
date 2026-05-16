@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, dev]
 
+env:
+  # Opt in to Node 24 for JavaScript-based actions ahead of the
+  # 2026-06 default flip — silences the deprecation banner.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   check:
     runs-on: ${{ matrix.os }}
@@ -16,9 +21,9 @@ jobs:
         node: [22]
     steps:
       - uses: actions/checkout@v4
+      # pnpm version comes from package.json's `packageManager` field.
+      # Passing `version:` here too triggers ERR_PNPM_BAD_PM_VERSION.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
