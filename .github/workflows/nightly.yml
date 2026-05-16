@@ -1,0 +1,88 @@
+name: Nightly (dev channel)
+
+# 13d: dev channel publishes a prerelease only if there are new commits
+# since the last tag (`since-last-tag` gate). Triggered on a daily cron,
+# but `workflow_dispatch` is available to run on demand.
+
+on:
+  schedule:
+    - cron: '15 18 * * *' # 02:15 UTC+8 — quiet hours in CN
+  workflow_dispatch:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      should-build: ${{ steps.check.outputs.should-build }}
+      version: ${{ steps.check.outputs.version }}
+      sha: ${{ steps.check.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [[ -z "$last_tag" ]]; then
+            echo "no previous tag; first nightly will build"
+            echo "should-build=true" >> "$GITHUB_OUTPUT"
+          else
+            count=$(git rev-list --count "$last_tag"..HEAD)
+            if [[ "$count" -gt 0 ]]; then
+              echo "should-build=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "should-build=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+          sha=$(git rev-parse --short HEAD)
+          ver=$(node -p "require('./package.json').version")
+          echo "version=${ver}-dev.${sha}" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: gate
+    if: needs.gate.outputs.should-build == 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Bump package version to nightly id
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $pkg.version = '${{ needs.gate.outputs.version }}'
+          $pkg | ConvertTo-Json -Depth 10 | Set-Content package.json
+
+      - name: Install
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build
+        run: pnpm pack:installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly-${{ needs.gate.outputs.sha }}
+          name: SnowLuma Desktop nightly ${{ needs.gate.outputs.version }}
+          prerelease: true
+          files: |
+            release/*.exe
+            release/*.zip
+            release/latest.yml
+            release/latest*.yml
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,82 @@
+{
+  "name": "snowluma-desktop",
+  "version": "1.8.1",
+  "private": true,
+  "type": "module",
+  "description": "SnowLuma Desktop — Electron launcher and onboarding wizard for the SnowLuma QQ bot framework",
+  "author": {
+    "name": "MotricSeven",
+    "email": "motricseven@gmail.com"
+  },
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/SnowLuma/SnowLumaDesktop#readme",
+  "bugs": {
+    "url": "https://github.com/SnowLuma/SnowLumaDesktop/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SnowLuma/SnowLumaDesktop.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "pack:dir": "electron-vite build && electron-builder --dir",
+    "pack:installer": "electron-vite build && electron-builder",
+    "pack:portable": "electron-vite build && electron-builder --config.win.target=portable"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@radix-ui/react-slot": "^1.1.3",
+    "@snowluma/ui": "link:../../packages/ui",
+    "adm-zip": "^0.5.16",
+    "node-fetch": "^3.3.2",
+    "regedit": "^5.1.4",
+    "@tanstack/react-query": "^5.62.7",
+    "@tanstack/react-router": "^1.169.2",
+    "@trpc/client": "^11.7.1",
+    "@trpc/react-query": "^11.7.1",
+    "@trpc/server": "^11.7.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "electron-store": "^11.0.0",
+    "electron-trpc": "^0.7.1",
+    "electron-updater": "^6.6.5",
+    "i18next": "^25.4.0",
+    "jotai": "^2.14.0",
+    "lucide-react": "^0.469.0",
+    "motion": "^12.0.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-i18next": "^16.0.0",
+    "tailwind-merge": "^3.5.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@tanstack/router-devtools": "^1.167.0",
+    "@types/adm-zip": "^0.5.7",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^4.0.0",
+    "eslint": "^10.2.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4"
+  }
+}

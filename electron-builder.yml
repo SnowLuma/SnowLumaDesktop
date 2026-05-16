@@ -1,0 +1,34 @@
+## Placeholder. Phase 5 will fill in code-signing-free NSIS + portable zip.
+appId: org.snowluma.desktop
+productName: SnowLuma Desktop
+copyright: SnowLuma Project
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+asarUnpack:
+  - resources/**
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  artifactName: ${productName}-Setup-${version}.${ext}
+  shortcutName: SnowLuma Desktop
+  deleteAppDataOnUninstall: false
+portable:
+  artifactName: ${productName}-Portable-${version}.${ext}
+publish:
+  provider: github
+  owner: SnowLuma
+  repo: SnowLumaDesktop

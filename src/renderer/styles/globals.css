@@ -1,0 +1,21 @@
+@import "tailwindcss";
+@import "@snowluma/ui/styles/theme.css";
+
+/* Scan @snowluma/ui sources for utility class usage. The package is
+   symlinked from node_modules to packages/ui (via pnpm `link:`). */
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.5;
+  }
+}

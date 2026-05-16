@@ -1,0 +1,4 @@
+# Desktop is an independent repo. This empty workspace file shields it from
+# the parent SnowLuma monorepo's `packages/*` workspace, so `pnpm install`
+# only operates on this repo's package.json.
+packages: []

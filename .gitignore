@@ -1,0 +1,22 @@
+node_modules
+out
+dist
+release
+.electron-builder.cache
+
+# Logs
+*.log
+logs
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+
+# Build artifacts
+*.tsbuildinfo

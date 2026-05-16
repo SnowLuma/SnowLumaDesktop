@@ -1,0 +1,197 @@
+{
+  "app": {
+    "name": "SnowLuma Desktop",
+    "loading": "Loading…",
+    "loadingInfo": "Fetching app info…"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "close": "Close"
+  },
+  "wizard": {
+    "back": "Back",
+    "next": "Next",
+    "skip": "Skip (I'm an existing user)",
+    "steps": {
+      "welcome": "Welcome",
+      "network": "Mirrors",
+      "av": "Antivirus",
+      "coreDownload": "Core",
+      "qqDetect": "QQ",
+      "addBot": "Bot",
+      "prefs": "Prefs",
+      "done": "Done"
+    },
+    "welcome": {
+      "title": "Welcome to SnowLuma Desktop",
+      "subtitle": "The desktop launcher for SnowLuma — get a QQ bot online in five minutes.",
+      "factLocal": { "title": "Local data only", "body": "Bot configs, chat history, credentials live on your machine. Nothing is uploaded." },
+      "factHook": { "title": "How it works: process injection", "body": "SnowLuma injects a DLL into QQ after you log in, the same approach as NapCat." },
+      "factAv": { "title": "AV may complain", "body": "Process injection is exactly what AV looks for. We'll guide you through whitelisting Defender." },
+      "accept": "Got it, let's go"
+    },
+    "network": {
+      "title": "Download mirrors",
+      "subtitle": "Defaults to GitHub Releases. Configure mirrors below if needed.",
+      "using": "Using: recommended mirror ✓",
+      "advanced": "Advanced",
+      "addMirror": "Add mirror",
+      "nameLabel": "Name",
+      "addButton": "Add"
+    },
+    "av": {
+      "title": "Antivirus whitelist",
+      "subtitle": "We recommend whitelisting SnowLuma in Defender so the native addon isn't quarantined.",
+      "detecting": "Detecting…",
+      "defenderRunning": "Defender is running — whitelisting prevents false-positives.",
+      "addWhitelist": "Whitelist (needs UAC)",
+      "whitelisting": "Requesting UAC…",
+      "thirdPartyDetected": "{{count}} third-party AV detected",
+      "thirdPartyHint": "Whitelist them in their own UI."
+    },
+    "coreDownload": {
+      "title": "Download core",
+      "subtitle": "Picks a core version and unpacks to %APPDATA%/SnowLumaDesktop/core/versions/<version>/.",
+      "versionLabel": "Version (e.g. 1.8.1)",
+      "fileLabel": "Filename (use {version})",
+      "download": "Download",
+      "downloading": "Downloading…",
+      "installed": "Installed versions",
+      "noneInstalled": "No versions installed yet",
+      "active": "active",
+      "activate": "Activate"
+    },
+    "qqDetect": {
+      "title": "Detect QQ",
+      "subtitle": "Desktop does not bundle QQ — install QQ (QQNT) separately first.",
+      "searching": "Searching for QQ…",
+      "found": "QQ install located",
+      "notFound": "QQ not found",
+      "notFoundHint": "Install QQ from the official site, then re-detect.",
+      "openOfficial": "Open QQ site",
+      "rescan": "Re-detect",
+      "versionLabel": "Version",
+      "compatGood": "✓ Verified",
+      "compatUnknown": "Untested — should still work",
+      "compatBad": "Known to be broken; switch versions",
+      "compatTooOld": "Too old; upgrade QQ"
+    },
+    "addBot": {
+      "title": "Add your first Bot",
+      "subtitle": "Desktop launches QQ; once you log in, SnowLuma injects automatically.",
+      "nameLabel": "Bot name (optional)",
+      "namePlaceholder": "e.g. \"My main account\"",
+      "launchMode": "Launch mode",
+      "launchDesktop": "Desktop manages QQ (recommended)",
+      "launchUser": "I'll start QQ myself",
+      "launchDesktopHint": "Desktop will launch, monitor and restart QQ.",
+      "launchUserHint": "Desktop only watches for QQ and injects.",
+      "hideAfterLogin": "Hide QQ main window after login",
+      "hideAfterLoginHint": "Stops users from treating QQ as a plain client.",
+      "launch": "Launch Bot",
+      "launching": "Launching…",
+      "online": "🟢 Bot {{uin}} online",
+      "loginHint": "A QQ window will open; scan QR or enter password to log in.",
+      "skipForNow": "Skip — go to main UI"
+    },
+    "prefs": {
+      "title": "Preferences",
+      "subtitle": "Autostart + launch behaviour. Editable later in Settings.",
+      "autostart": "Start with Windows",
+      "autostartHint": "Launches Desktop on boot.",
+      "openMainOnLaunch": "Open main window on launch",
+      "openMainOnLaunchHint": "If off, Desktop launches silently into the tray."
+    },
+    "done": {
+      "title": "All set 🎉",
+      "subtitle": "Desktop is ready. Click below to enter the main UI.",
+      "enter": "Enter",
+      "entering": "Entering…"
+    }
+  },
+  "main": {
+    "nav": { "bots": "Bots", "logs": "Logs", "settings": "Settings", "update": "Update", "diagnostic": "Diagnostic" },
+    "bots": {
+      "title": "Bots",
+      "empty": "No bots yet",
+      "addBot": "Add Bot",
+      "banner": "No bots online",
+      "bannerHint": "Click below to add your first bot.",
+      "loadingWebui": "Waiting for webui…",
+      "webuiUnavailable": "core not running or webui unavailable.",
+      "rename": "Rename Bot",
+      "renameHint": "Pick a memorable name; QQ nickname stays as a subtitle.",
+      "nameLabel": "Bot name",
+      "deleteTitle": "Delete {{name}}",
+      "deleteHint": "Type the Bot's name to confirm. You have a 5-second undo window.",
+      "confirmNameLabel": "Type the Bot's name to confirm",
+      "deleteWithData": "Also delete chat history (data/)",
+      "deleteWithConfig": "Also delete config (config/)",
+      "deleteConfirm": "Delete",
+      "deletedToast": "Deleted {{name}}",
+      "undo": "Undo",
+      "orphansFound": "{{count}} unregistered Bot directories"
+    },
+    "logs": { "title": "Desktop logs", "empty": "No log output yet.", "openFolder": "Open log folder", "openFolderHint": "%APPDATA%/SnowLumaDesktop/logs/" },
+    "diagnostic": {
+      "title": "Export diagnostic",
+      "subtitle": "Bundle logs and environment into a zip for issue reports.",
+      "export": "Export",
+      "exporting": "Exporting…",
+      "exported": "Saved to: {{path}}",
+      "privacyNote": "UINs are hashed; other sensitive fields removed. Inspect before sharing."
+    },
+    "update": {
+      "title": "Update",
+      "current": "Current version",
+      "latest": "Latest version",
+      "channelLabel": "Update channel",
+      "channelHint": "main = stable; dev = nightly preview.",
+      "changelog": "Changelog",
+      "recheck": "Re-check",
+      "download": "Download",
+      "downloading": "Downloading…",
+      "restartInstall": "Restart and install"
+    },
+    "settings": {
+      "title": "Settings",
+      "tabs": { "general": "General", "core": "Core", "mirrors": "Mirrors" },
+      "themeLabel": "Appearance",
+      "themeHint": "system follows the OS palette.",
+      "themeSystem": "System",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "languageLabel": "Language",
+      "autostartLabel": "Start with Windows",
+      "autostartHint": "Launch Desktop on boot.",
+      "openMainOnLaunchLabel": "Open main window on launch",
+      "openMainOnLaunchHint": "Off = launch silently into tray.",
+      "coreVersions": "Installed core versions",
+      "coreVersionsHint": "Switch versions; activating restarts core.",
+      "coreSync": "Rescan",
+      "coreRestart": "Restart core",
+      "coreNone": "No core versions installed",
+      "coreActive": "active",
+      "coreActivate": "Activate",
+      "mirrorAdd": "Add mirror",
+      "mirrorName": "Name",
+      "mirrorAddBtn": "Add"
+    }
+  },
+  "boot": {
+    "title": "❄️ SnowLuma Desktop",
+    "subtitle": "Phase 1 scaffold · Hello SnowLuma",
+    "ipcOk": "tRPC IPC connected",
+    "versionLabel": "Desktop version",
+    "electronLabel": "Electron",
+    "nodeLabel": "Node",
+    "chromeLabel": "Chrome",
+    "platformLabel": "Platform",
+    "packagedLabel": "Mode",
+    "packaged": "packaged",
+    "unpackaged": "dev"
+  }
+}

@@ -1,0 +1,217 @@
+{
+  "app": {
+    "name": "SnowLuma Desktop",
+    "loading": "加载中…",
+    "loadingInfo": "正在读取应用信息…"
+  },
+  "common": {
+    "cancel": "取消",
+    "save": "保存",
+    "confirm": "确认",
+    "delete": "删除",
+    "close": "关闭"
+  },
+  "wizard": {
+    "back": "上一步",
+    "next": "下一步",
+    "skip": "我是老用户，跳过向导",
+    "steps": {
+      "welcome": "欢迎",
+      "network": "下载源",
+      "av": "杀软",
+      "coreDownload": "下载 core",
+      "qqDetect": "QQ 检测",
+      "addBot": "添加 Bot",
+      "prefs": "偏好",
+      "done": "完成"
+    },
+    "welcome": {
+      "title": "欢迎使用 SnowLuma Desktop",
+      "subtitle": "新一代 QQ Bot 框架的桌面端，让新手也能五分钟跑起来。",
+      "factLocal": {
+        "title": "数据本地",
+        "body": "所有 Bot 配置、聊天历史、登录凭证都只存在本机，不会上传任何服务器。"
+      },
+      "factHook": {
+        "title": "原理：注入 QQ 进程",
+        "body": "SnowLuma 在你启动 QQ 后注入一个 DLL 读消息、发消息——和 NapCat 一脉相承。"
+      },
+      "factAv": {
+        "title": "杀软可能误报",
+        "body": "注入是杀软最敏感的动作，因此 Defender / 360 / 火绒可能把它当成可疑行为。安装时我们会引导你加白名单。"
+      },
+      "accept": "我接受，开始"
+    },
+    "network": {
+      "title": "下载源",
+      "subtitle": "Desktop 默认使用 GitHub Releases。国内用户可在下面配置镜像优先级。",
+      "using": "正在使用：推荐镜像 ✓",
+      "advanced": "高级",
+      "addMirror": "添加镜像",
+      "nameLabel": "名称",
+      "addButton": "添加"
+    },
+    "av": {
+      "title": "杀软白名单",
+      "subtitle": "我们建议把 SnowLuma 加进 Windows Defender 的白名单，否则 core 的 native 库可能被删。",
+      "detecting": "正在检测…",
+      "defenderRunning": "Defender 正在运行 — 加白名单后可避免误删。",
+      "addWhitelist": "一键加白名单（需要 UAC）",
+      "whitelisting": "请求 UAC 中…",
+      "thirdPartyDetected": "发现 {{count}} 个第三方杀软",
+      "thirdPartyHint": "这些杀软的白名单需要在它们各自的界面操作。"
+    },
+    "coreDownload": {
+      "title": "下载 core",
+      "subtitle": "选一个 core 版本下载到 %APPDATA%/SnowLumaDesktop/core/versions/<版本>/。",
+      "versionLabel": "版本号（如 1.8.1）",
+      "fileLabel": "文件名（用 {version} 占位）",
+      "download": "开始下载",
+      "downloading": "下载中…",
+      "installed": "已安装版本",
+      "noneInstalled": "尚未下载任何版本",
+      "active": "激活中",
+      "activate": "设为激活"
+    },
+    "qqDetect": {
+      "title": "QQ 检测",
+      "subtitle": "Desktop 不会自带 QQ。需要本机已经装好 QQ（QQNT）。",
+      "searching": "正在搜索 QQ 安装路径…",
+      "found": "已找到 QQ 安装",
+      "notFound": "没找到 QQ",
+      "notFoundHint": "请去 QQ 官网下载安装，装完点 \"重新检测\"。",
+      "openOfficial": "打开 QQ 官网",
+      "rescan": "重新检测",
+      "versionLabel": "版本",
+      "compatGood": "✓ 已验证可用",
+      "compatUnknown": "未在已知列表中——理论上仍可工作",
+      "compatBad": "已知不兼容，建议换版本",
+      "compatTooOld": "版本过旧，需要升级 QQ"
+    },
+    "addBot": {
+      "title": "添加第一个 Bot",
+      "subtitle": "Desktop 会启动 QQ，等你扫码登录后自动注入。",
+      "nameLabel": "Bot 名字（可选）",
+      "namePlaceholder": "比如 \"我的主号\"",
+      "launchMode": "启动方式",
+      "launchDesktop": "Desktop 接管 QQ 生命周期（推荐）",
+      "launchUser": "我自己启动 QQ",
+      "launchDesktopHint": "Desktop 会启动、监控、重启 QQ。Desktop 退出时也会停 QQ。",
+      "launchUserHint": "你自己启动 QQ；Desktop 只检测并注入。",
+      "hideAfterLogin": "登录后隐藏 QQ 主界面",
+      "hideAfterLoginHint": "推荐打开，避免 QQ 聊天列表被当作普通 QQ 用。",
+      "launch": "启动 Bot",
+      "launching": "启动中…",
+      "online": "🟢 Bot {{uin}} 已在线",
+      "loginHint": "QQ 窗口会弹出，请扫码或输入密码完成登录。",
+      "skipForNow": "暂不添加，进主界面"
+    },
+    "prefs": {
+      "title": "偏好",
+      "subtitle": "开机自启 + 启动模式。也可以以后在设置里改。",
+      "autostart": "开机自启 SnowLuma",
+      "autostartHint": "电脑开机时自动启动 SnowLuma Desktop。",
+      "openMainOnLaunch": "启动后打开主窗口",
+      "openMainOnLaunchHint": "关闭此项时启动后只缩在托盘里。"
+    },
+    "done": {
+      "title": "全部完成 🎉",
+      "subtitle": "Desktop 已就绪。点下面的按钮进入主界面。",
+      "enter": "进入主界面",
+      "entering": "进入中…"
+    }
+  },
+  "main": {
+    "nav": {
+      "bots": "Bots",
+      "logs": "日志",
+      "settings": "设置",
+      "update": "更新",
+      "diagnostic": "诊断"
+    },
+    "bots": {
+      "title": "Bot 列表",
+      "empty": "尚未添加 Bot",
+      "addBot": "添加 Bot",
+      "banner": "尚未有上线的 Bot",
+      "bannerHint": "点击下方按钮添加你的第一个 Bot。",
+      "loadingWebui": "正在等待 webui 启动…",
+      "webuiUnavailable": "core 未启动或 webui 无法访问。",
+      "rename": "重命名 Bot",
+      "renameHint": "起一个你记得住的名字，Bot 的 QQ 昵称会作为副标题展示。",
+      "nameLabel": "Bot 名字",
+      "deleteTitle": "删除 {{name}}",
+      "deleteHint": "输入 Bot 的名字以确认。删除后会有 5 秒撤销窗口。",
+      "confirmNameLabel": "输入 Bot 名字确认",
+      "deleteWithData": "同时删除聊天历史 (data/)",
+      "deleteWithConfig": "同时删除配置 (config/)",
+      "deleteConfirm": "删除",
+      "deletedToast": "已删除 {{name}}",
+      "undo": "撤销",
+      "orphansFound": "发现 {{count}} 个未登记的 Bot 目录"
+    },
+    "logs": {
+      "title": "Desktop 日志",
+      "empty": "暂无日志输出。",
+      "openFolder": "打开日志目录",
+      "openFolderHint": "日志目录位于 %APPDATA%/SnowLumaDesktop/logs/"
+    },
+    "diagnostic": {
+      "title": "诊断导出",
+      "subtitle": "把诊断信息打包成 zip，方便提 issue 时附上。",
+      "export": "导出诊断报告",
+      "exporting": "导出中…",
+      "exported": "已保存到：{{path}}",
+      "privacyNote": "导出内容已对 UIN 哈希；其他敏感字段已删除。导出前可在另一台机器解压检查。"
+    },
+    "update": {
+      "title": "更新",
+      "current": "当前版本",
+      "latest": "最新版本",
+      "channelLabel": "更新通道",
+      "channelHint": "main = 稳定发布；dev = nightly 预览。",
+      "changelog": "变更日志",
+      "recheck": "重新检查",
+      "download": "下载更新",
+      "downloading": "下载中…",
+      "restartInstall": "重启并安装"
+    },
+    "settings": {
+      "title": "设置",
+      "tabs": { "general": "通用", "core": "Core", "mirrors": "下载源" },
+      "themeLabel": "外观",
+      "themeHint": "system 跟随系统配色。",
+      "themeSystem": "跟随系统",
+      "themeLight": "浅色",
+      "themeDark": "深色",
+      "languageLabel": "语言",
+      "autostartLabel": "开机自启",
+      "autostartHint": "电脑开机时自动启动 SnowLuma Desktop。",
+      "openMainOnLaunchLabel": "启动后打开主窗口",
+      "openMainOnLaunchHint": "关闭后启动只显示托盘图标。",
+      "coreVersions": "已安装的 core 版本",
+      "coreVersionsHint": "在多个版本之间切换；激活版本即生效（会重启 core）。",
+      "coreSync": "重新扫描",
+      "coreRestart": "重启 core",
+      "coreNone": "尚未下载任何 core 版本",
+      "coreActive": "激活中",
+      "coreActivate": "激活",
+      "mirrorAdd": "添加镜像",
+      "mirrorName": "名称",
+      "mirrorAddBtn": "添加"
+    }
+  },
+  "boot": {
+    "title": "❄️ SnowLuma Desktop",
+    "subtitle": "Phase 1 骨架 · Hello SnowLuma",
+    "ipcOk": "tRPC IPC 已连接",
+    "versionLabel": "Desktop 版本",
+    "electronLabel": "Electron",
+    "nodeLabel": "Node",
+    "chromeLabel": "Chrome",
+    "platformLabel": "平台",
+    "packagedLabel": "运行模式",
+    "packaged": "打包",
+    "unpackaged": "开发"
+  }
+}
