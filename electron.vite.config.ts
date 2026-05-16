@@ -1,10 +1,36 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
+const require = createRequire(import.meta.url);
+const pkg = require('./package.json') as {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+
+// Build a closed list of modules main / preload must `require()` at
+// runtime instead of inlining: every production dep, every electron-*
+// dev dep (electron itself plus a couple of toolkit packages that drag
+// the npm-electron helper code in), and any deep sub-paths thereof.
+//
+// We do this BOTH through electron-vite's plugin AND directly in
+// rollupOptions.external because vite 8's rolldown bundler doesn't
+// always honour the plugin's `config` hook for this field.
+const runtimeExternals = Array.from(
+  new Set([
+    ...Object.keys(pkg.dependencies ?? {}),
+    'electron',
+    'electron-devtools-installer',
+  ]),
+);
+const externalMatcher = [
+  ...runtimeExternals,
+  new RegExp(`^(${runtimeExternals.map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})/.+`),
+];
 
 const sharedAlias = {
   '@shared': resolve(root, 'src/shared'),
@@ -20,11 +46,12 @@ const sharedAlias = {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ include: ['electron'] })],
     build: {
       outDir: 'out/main',
       rollupOptions: {
         input: resolve(root, 'src/main/index.ts'),
+        external: externalMatcher,
       },
     },
     resolve: {
@@ -35,11 +62,12 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ include: ['electron'] })],
     build: {
       outDir: 'out/preload',
       rollupOptions: {
         input: resolve(root, 'src/preload/index.ts'),
+        external: externalMatcher,
       },
     },
     resolve: {
