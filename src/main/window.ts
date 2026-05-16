@@ -1,9 +1,11 @@
 import { BrowserWindow, shell } from 'electron';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { is } from '@electron-toolkit/utils';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
+// electron-vite injects a CJS shim at bundle scope that already declares
+// `__dirname = import.meta.dirname`, so redeclaring it here triggers
+// "Identifier '__dirname' has already been declared" at module load.
+// Use the shim's value directly.
 
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
