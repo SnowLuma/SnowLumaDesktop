@@ -13,11 +13,38 @@ jobs:
   typecheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout main monorepo for @snowluma/ui
+        uses: actions/checkout@v4
+        with:
+          repository: SnowLuma/SnowLuma
+          ref: main
+          path: snowluma
+      - name: Checkout Desktop
+        uses: actions/checkout@v4
+        with:
+          path: snowluma/dev/SnowLumaDesktop
+
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
-      - run: pnpm typecheck
+          cache-dependency-path: |
+            snowluma/pnpm-lock.yaml
+            snowluma/dev/SnowLumaDesktop/pnpm-lock.yaml
+
+      - name: 'Install main monorepo (root + packages/*)'
+        working-directory: snowluma
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build @snowluma/ui
+        working-directory: snowluma/packages/ui
+        run: pnpm build
+
+      - name: Install Desktop deps
+        working-directory: snowluma/dev/SnowLumaDesktop
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Typecheck
+        working-directory: snowluma/dev/SnowLumaDesktop
+        run: pnpm typecheck

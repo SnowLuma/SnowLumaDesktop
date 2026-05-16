@@ -20,23 +20,53 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         node: [22]
     steps:
-      - uses: actions/checkout@v4
+      # Desktop depends on @snowluma/ui via `link:../../packages/ui`, so we
+      # need the main monorepo checked out at a sibling-two-levels-up path.
+      # Layout:
+      #   $GITHUB_WORKSPACE/snowluma/                        (SnowLuma/SnowLuma)
+      #   $GITHUB_WORKSPACE/snowluma/packages/ui/            (link target)
+      #   $GITHUB_WORKSPACE/snowluma/dev/SnowLumaDesktop/    (this repo)
+      - name: Checkout main monorepo for @snowluma/ui
+        uses: actions/checkout@v4
+        with:
+          repository: SnowLuma/SnowLuma
+          ref: main
+          path: snowluma
+      - name: Checkout Desktop into snowluma/dev/SnowLumaDesktop
+        uses: actions/checkout@v4
+        with:
+          path: snowluma/dev/SnowLumaDesktop
+
       # pnpm version comes from package.json's `packageManager` field.
-      # Passing `version:` here too triggers ERR_PNPM_BAD_PM_VERSION.
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+          cache-dependency-path: |
+            snowluma/pnpm-lock.yaml
+            snowluma/dev/SnowLumaDesktop/pnpm-lock.yaml
 
-      - name: 'Install (no-frozen-lockfile to tolerate local link: deps)'
+      - name: 'Install main monorepo (root + packages/*)'
+        working-directory: snowluma
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build @snowluma/ui
+        working-directory: snowluma/packages/ui
+        run: pnpm build
+
+      - name: Install Desktop deps
+        working-directory: snowluma/dev/SnowLumaDesktop
         run: pnpm install --no-frozen-lockfile
 
       - name: Typecheck
+        working-directory: snowluma/dev/SnowLumaDesktop
         run: pnpm typecheck
 
       - name: Test
+        working-directory: snowluma/dev/SnowLumaDesktop
         run: pnpm test
 
-      - name: Build (electron-vite only — packaging happens in release.yml)
+      - name: 'Build (electron-vite only — packaging is in release.yml)'
+        working-directory: snowluma/dev/SnowLumaDesktop
         run: pnpm build

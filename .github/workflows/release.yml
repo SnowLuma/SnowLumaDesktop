@@ -6,8 +6,6 @@ on:
       - 'v*'
 
 env:
-  # Opt in to Node 24 for JavaScript-based actions ahead of the
-  # 2026-06 default flip — silences the deprecation banner.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -16,21 +14,49 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      # pnpm version comes from package.json's `packageManager` field.
+      - name: Checkout main monorepo for @snowluma/ui
+        uses: actions/checkout@v4
+        with:
+          repository: SnowLuma/SnowLuma
+          ref: main
+          path: snowluma
+      - name: Checkout Desktop
+        uses: actions/checkout@v4
+        with:
+          path: snowluma/dev/SnowLumaDesktop
+
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: |
+            snowluma/pnpm-lock.yaml
+            snowluma/dev/SnowLumaDesktop/pnpm-lock.yaml
 
-      - name: Install
+      - name: 'Install main monorepo (root + packages/*)'
+        working-directory: snowluma
+        shell: bash
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build @snowluma/ui
+        working-directory: snowluma/packages/ui
+        shell: bash
+        run: pnpm build
+
+      - name: Install Desktop deps
+        working-directory: snowluma/dev/SnowLumaDesktop
+        shell: bash
         run: pnpm install --no-frozen-lockfile
 
       - name: Typecheck
+        working-directory: snowluma/dev/SnowLumaDesktop
+        shell: bash
         run: pnpm typecheck
 
       - name: Build NSIS installer + portable zip
+        working-directory: snowluma/dev/SnowLumaDesktop
+        shell: bash
         run: pnpm pack:installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -40,10 +66,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/*.exe
-            release/*.zip
-            release/latest.yml
-            release/latest*.yml
+            snowluma/dev/SnowLumaDesktop/release/*.exe
+            snowluma/dev/SnowLumaDesktop/release/*.zip
+            snowluma/dev/SnowLumaDesktop/release/latest.yml
+            snowluma/dev/SnowLumaDesktop/release/latest*.yml
           fail_on_unmatched_files: false
           draft: false
           prerelease: false
