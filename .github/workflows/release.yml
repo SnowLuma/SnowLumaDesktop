@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SnowLuma/SnowLuma
-          ref: main
+          ref: dev
           path: snowluma
       - name: Checkout Desktop
         uses: actions/checkout@v4
