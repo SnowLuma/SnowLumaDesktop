@@ -12,6 +12,17 @@ import { getStore } from './store/store';
 
 const log = createLogger('main');
 
+// Catch anything that escapes whenReady — packaged Electron just exits
+// silently on unhandled errors otherwise, leaving "3 processes but no
+// window" hangs with no log trail.
+process.on('uncaughtException', (err) => {
+  log.error(`uncaughtException: ${err.message}\n${err.stack ?? ''}`);
+});
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? `${reason.message}\n${reason.stack ?? ''}` : String(reason);
+  log.error(`unhandledRejection: ${msg}`);
+});
+
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
@@ -28,39 +39,89 @@ if (!gotLock) {
     mainWindow.focus();
   });
 
-  app.whenReady().then(() => {
-    electronApp.setAppUserModelId(`com.snowluma.${APP_NAME.toLowerCase()}`);
+  app.whenReady().then(bootstrap, (err) => {
+    log.error(`whenReady rejected: ${err instanceof Error ? err.message : String(err)}`);
+  });
 
-    app.on('browser-window-created', (_event, window) => {
-      optimizer.watchWindowShortcuts(window);
-    });
+  app.on('before-quit', () => {
+    isQuitting = true;
+  });
 
-    const services = initServices();
+  app.on('will-quit', () => {
+    destroyTray();
+  });
 
-    mainWindow = createMainWindow();
+  app.on('window-all-closed', () => {
+    // 5b · do NOT auto-quit on Windows; tray keeps the app alive until
+    // a Quit is explicitly requested. macOS: keep the dock entry per
+    // platform convention.
+  });
+}
+
+async function bootstrap(): Promise<void> {
+  log.info(
+    `bootstrap start. electron=${process.versions.electron} chrome=${process.versions.chrome} node=${process.versions.node} platform=${process.platform} arch=${process.arch} packaged=${app.isPackaged}`,
+  );
+
+  electronApp.setAppUserModelId(`com.snowluma.${APP_NAME.toLowerCase()}`);
+
+  app.on('browser-window-created', (_event, window) => {
+    optimizer.watchWindowShortcuts(window);
+  });
+
+  // Phase 1: window first, so even if any later service crashes the
+  // user still sees a UI to recover with.
+  const startHidden = wasLaunchedHidden();
+  log.info(`wasLaunchedHidden=${startHidden} argv=${JSON.stringify(process.argv)}`);
+
+  try {
+    mainWindow = createMainWindow({ startHidden });
+  } catch (err) {
+    log.error(`createMainWindow threw: ${err instanceof Error ? err.message : String(err)}`);
+    await dialog.showErrorBox(
+      'SnowLuma 启动失败',
+      `无法创建主窗口：${err instanceof Error ? err.message : String(err)}`,
+    );
+    app.exit(1);
+    return;
+  }
+
+  // Phase 2: services + IPC bridge. Each is wrapped so one failure
+  // doesn't abort the rest.
+  let services: ReturnType<typeof initServices>;
+  try {
+    services = initServices();
+  } catch (err) {
+    log.error(`initServices threw: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  try {
     attachTrpcBridge([mainWindow]);
+  } catch (err) {
+    log.error(`attachTrpcBridge threw: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
-    // 11c · close-to-tray: hide instead of destroy on user X-click. Only a
-    // real Quit (tray menu → 退出, or app.exit) closes the window.
-    mainWindow.on('close', async (event) => {
-      if (isQuitting) return;
-      event.preventDefault();
-      mainWindow?.hide();
-      const store = getStore();
-      if (!store.get('trayHintShown')) {
-        store.set('trayHintShown', true);
-        // 11c i: first-time toast hint. We pop a native modal (rare event,
-        // worth being obvious) but only the first time.
-        await dialog.showMessageBox({
-          type: 'info',
-          title: 'SnowLuma 仍在后台运行',
-          message: '关闭主窗口不会真正退出 SnowLuma。',
-          detail: '右键托盘 → "⏻ 退出" 可彻底停止所有 Bot 和 core 进程。',
-          buttons: ['好的'],
-        });
-      }
-    });
+  // 11c · close-to-tray: hide instead of destroy on user X-click.
+  mainWindow.on('close', async (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    mainWindow?.hide();
+    const store = getStore();
+    if (!store.get('trayHintShown')) {
+      store.set('trayHintShown', true);
+      await dialog.showMessageBox({
+        type: 'info',
+        title: 'SnowLuma 仍在后台运行',
+        message: '关闭主窗口不会真正退出 SnowLuma。',
+        detail: '右键托盘 → "退出" 可彻底停止所有 Bot 和 core 进程。',
+        buttons: ['好的'],
+      });
+    }
+  });
 
+  // Phase 3: tray. Failing to build the tray must NOT kill the window.
+  try {
     createTray({
       getMainWindow: () => mainWindow,
       confirmQuit: async () => {
@@ -88,41 +149,36 @@ if (!gotLock) {
         return false;
       },
     });
+  } catch (err) {
+    log.error(`createTray threw (continuing): ${err instanceof Error ? err.message : String(err)}`);
+  }
 
-    // Apply OS-level autostart preference based on persisted setting.
+  // Phase 4: best-effort housekeeping.
+  try {
     applyAutostartPreference();
+  } catch (err) {
+    log.warn(`applyAutostartPreference: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
-    // Autostart was launched but user prefers silent tray: hide initial window.
-    if (wasLaunchedHidden()) {
-      mainWindow?.once('ready-to-show', () => mainWindow?.hide());
-    }
+  void cleanupOldTrash(30_000).catch((err) =>
+    log.warn(`cleanupOldTrash: ${err instanceof Error ? err.message : String(err)}`),
+  );
 
-    void cleanupOldTrash(30_000); // sweep stale trash > 30s old (5s undo + slack)
-    void services.core.start();   // resume core if a version is active
+  void services.core.start().catch((err) =>
+    log.warn(`core start: ${err instanceof Error ? err.message : String(err)}`),
+  );
 
-    log.info('app ready');
+  log.info('app ready');
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      try {
         mainWindow = createMainWindow();
-      } else {
-        mainWindow?.show();
+      } catch (err) {
+        log.error(`createMainWindow on activate threw: ${err instanceof Error ? err.message : String(err)}`);
       }
-    });
-  });
-
-  app.on('before-quit', () => {
-    isQuitting = true;
-  });
-
-  app.on('will-quit', () => {
-    destroyTray();
-  });
-
-  app.on('window-all-closed', () => {
-    // 5b · do NOT auto-quit on Windows; tray keeps the app alive until
-    // a Quit is explicitly requested. macOS: keep the dock entry per
-    // platform convention (irrelevant for Desktop's win32-only target,
-    // but harmless to leave in for dev).
+    } else {
+      mainWindow?.show();
+    }
   });
 }
