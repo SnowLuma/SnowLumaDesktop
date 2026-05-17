@@ -1,10 +1,10 @@
 import { ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, stat } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { app } from 'electron';
-import { coreRuntimeDir, coreVersionsDir } from '../util/paths';
+import { coreVersionsDir } from '../util/paths';
 import { createLogger } from '../util/logger';
 import { getStore } from '../store/store';
 import { findFreePort } from './free-port';
@@ -106,8 +106,6 @@ export class CoreManager extends EventEmitter {
       log.error(`core entry not found under ${versionDir}`);
       return;
     }
-    const runtimeDir = coreRuntimeDir();
-    await mkdir(runtimeDir, { recursive: true });
 
     const port = this.state.webuiPort ?? (await findFreePort(5099));
     const credentials = ensureWebuiCredentials();
@@ -122,25 +120,30 @@ export class CoreManager extends EventEmitter {
     this.setStatus('starting', { activeVersion, webuiPort: port, pid: null });
     this.intentionalStop = false;
 
-    const runtime = resolveNodeRuntime();
-    // When we fall back to Electron's executable as the JS runtime, we
-    // MUST set ELECTRON_RUN_AS_NODE=1. Otherwise spawning
-    // SnowLumaDesktop.exe just relaunches the Desktop app, which then
-    // hits the single-instance lock and exits. The core-manager's
-    // crash-recover loop then re-spawns every 5s — exactly the
-    // "another instance already running; exiting" flood the user saw.
+    const runtime = resolveNodeRuntime(versionDir);
     if (runtime.kind === 'electron-as-node') {
+      // Last-resort fallback: spawning our own executable. MUST set
+      // ELECTRON_RUN_AS_NODE=1 so it doesn't relaunch the Desktop app
+      // and hit the single-instance lock. We also know the core misses
+      // crashpad / pollutes stderr with "crashpad_client_win.cc(869)
+      // not connected" in this mode — that's why we now prefer the
+      // bundled node.exe inside the version dir whenever it exists.
       env['ELECTRON_RUN_AS_NODE'] = '1';
-      // Defensive: clear vars Electron looks at for window/security
-      // surface so the spawned process really behaves like plain Node.
       delete env['ELECTRON_NO_ATTACH_CONSOLE'];
     }
 
+    // CWD must be the version dir, not a separate runtime dir.
+    // SnowLuma core resolves `config/runtime.json`, `data/*.db`,
+    // `native/...` etc. RELATIVE TO process.cwd() — the same way the
+    // shipped `launcher.bat` (which is literally `node index.mjs`)
+    // does. The previous `cwd: coreRuntimeDir()` left those paths
+    // dangling and the core silently exited within ~5 seconds,
+    // triggering the supervisor's restart loop.
     log.info(
-      `spawning core: runtime=${runtime.kind} bin=${runtime.bin} entry=${entry} cwd=${runtimeDir} port=${port}`,
+      `spawning core: runtime=${runtime.kind} bin=${runtime.bin} entry=${entry} cwd=${versionDir} port=${port}`,
     );
     const child = spawn(runtime.bin, [entry], {
-      cwd: runtimeDir,
+      cwd: versionDir,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -291,43 +294,55 @@ async function resolveEntry(versionDir: string): Promise<string | null> {
 
 interface NodeRuntime {
   bin: string;
-  kind: 'bundled-node' | 'system-node' | 'electron-as-node';
+  kind: 'core-bundled-node' | 'resources-bundled-node' | 'system-node' | 'electron-as-node';
 }
 
 /**
  * Locate a JS runtime to spawn core under.
  *
  * Preference order:
- *   1. `resources/node/<platform>-<arch>/node[.exe]` (or `resources/node/node[.exe]`):
- *      a real Node binary we may ship inside the asar resources dir.
- *   2. `node[.exe]` on PATH: only used in dev / when the user has Node
- *      installed system-wide. Safe to always probe — `spawn` will throw
- *      ENOENT and we fall through.
- *   3. Electron's own executable (`process.execPath`) with
- *      `ELECTRON_RUN_AS_NODE=1`. This is the documented Electron escape
- *      hatch for "run a JS script using Electron's bundled Node without
- *      starting the app." The caller MUST set the env var; otherwise on
- *      Windows the .exe re-launches the Desktop and hits the
- *      single-instance lock.
+ *   1. **`<versionDir>/node[.exe]`** — the Node binary SnowLuma ships
+ *      INSIDE the core release zip (see the screenshot the user
+ *      provided: `SnowLuma-v1.8.1-win-x64.zip` extracts node.exe right
+ *      next to index.mjs). This is the runtime the core was built and
+ *      tested against, so it's always the right answer when present.
+ *   2. `resources/node/<platform>-<arch>/node[.exe]` (or
+ *      `resources/node/node[.exe]`): a Node we might ship inside
+ *      Desktop's own asar resources dir as a future fallback.
+ *   3. `node[.exe]` on PATH: dev / system-Node fallback. `spawn`
+ *      throws ENOENT cleanly if it isn't there.
+ *   4. Electron's own executable (`process.execPath`) with
+ *      `ELECTRON_RUN_AS_NODE=1`. This worked-but-also-broke in earlier
+ *      builds — Electron-as-Node prints "crashpad_client_win.cc(869)
+ *      not connected" on every spawn and some native modules behave
+ *      subtly differently. Keep it as a last resort so we at least
+ *      start instead of erroring out, but warn loudly.
  */
-function resolveNodeRuntime(): NodeRuntime {
+function resolveNodeRuntime(versionDir: string): NodeRuntime {
   const platform = process.platform;
   const arch = process.arch;
   const exe = platform === 'win32' ? 'node.exe' : 'node';
+
+  const coreBundled = join(versionDir, exe);
+  if (existsSync(coreBundled)) {
+    return { bin: coreBundled, kind: 'core-bundled-node' };
+  }
+
   const resourceCandidates = [
     join(process.resourcesPath, 'node', `${platform}-${arch}`, exe),
     join(process.resourcesPath, 'node', exe),
   ];
   for (const candidate of resourceCandidates) {
-    if (existsSync(candidate)) return { bin: candidate, kind: 'bundled-node' };
+    if (existsSync(candidate)) {
+      return { bin: candidate, kind: 'resources-bundled-node' };
+    }
   }
   if (!app.isPackaged) {
-    // In dev, the user typically has node on PATH. Spawn it by bare name
-    // so the OS resolves via PATH.
     return { bin: exe, kind: 'system-node' };
   }
   log.warn(
-    'bundled Node binary not found in resources/; falling back to Electron with ELECTRON_RUN_AS_NODE=1',
+    `no node.exe found under versionDir or resources/; falling back to Electron-as-Node. ` +
+      `versionDir was ${versionDir} — re-download this core version to restore the bundled runtime.`,
   );
   return { bin: process.execPath, kind: 'electron-as-node' };
 }
