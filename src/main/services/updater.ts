@@ -1,9 +1,12 @@
-import { app } from 'electron';
-import { autoUpdater, type UpdateCheckResult } from 'electron-updater';
+import { app, shell } from 'electron';
 import { createLogger } from '../util/logger';
 import { getStore } from '../store/store';
+import { listReleases, type GithubRelease } from './github-api';
 
 const log = createLogger('updater');
+
+const DESKTOP_OWNER = 'SnowLuma';
+const DESKTOP_REPO = 'SnowLumaDesktop';
 
 export interface DesktopUpdateInfo {
   available: boolean;
@@ -12,124 +15,94 @@ export interface DesktopUpdateInfo {
   latestVersion: string | null;
   releaseNotes: string | null;
   releaseDate: string | null;
+  /**
+   * URL to the GitHub release page. We surface this for the "download"
+   * action instead of trying to auto-install — current packaged builds
+   * don't ship a `latest.yml`, so electron-updater can't perform the
+   * actual upgrade. Until that lands, "Download" opens the release
+   * page in the user's browser.
+   */
+  downloadUrl: string | null;
 }
 
 /**
- * Wraps electron-updater. Policy (7a-iii): notify only — never auto-download.
- * Caller triggers `download()` after user confirms. main vs dev (13d): main
- * uses GH Releases stable; dev opts into prereleases.
+ * Update checker for the Desktop app itself. We hit the public GitHub
+ * REST API rather than `electron-updater.checkForUpdates()`:
+ *   - REST returns prereleases without needing a `latest.yml` asset
+ *     (which we don't publish in nightlies).
+ *   - It surfaces a clean "no releases yet" state instead of the 100-
+ *     line CSP-header dump the old code path produced.
+ *   - It's also what the core-version picker uses, so one API call
+ *     pattern across the app.
  *
- * Quirk we worked around: when only prereleases exist on the GitHub
- * repo (the current SnowLumaDesktop state — we publish nightlies, no
- * stable yet), electron-updater hits /releases/latest, GitHub returns
- * 406, and the library blows up with a 100-line "Cannot parse releases
- * feed" error. We:
- *   1. Always set `allowPrerelease = true` so the atom-feed code path
- *      is used. The user's channel preference becomes a UI filter, not
- *      a hard switch.
- *   2. Demote the "no production release found" error in our wrapper
- *      to a clean no-update response.
- *   3. Pipe electron-updater's noisy errors through our logger at
- *      WARN level so the diagnostic export doesn't get spammed.
+ * Policy (7a-iii): notify only — never auto-download. The download()
+ * call just opens the release page; users grab the .exe themselves.
+ * Auto-install can come later once we ship a code-signed build + the
+ * latest.yml feed that electron-updater wants.
  */
 export class DesktopUpdater {
-  private initialised = false;
-
-  constructor() {
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = false;
-    autoUpdater.logger = {
-      info: (m: unknown) => log.info(String(m)),
-      warn: (m: unknown) => log.warn(String(m)),
-      // electron-updater logs the full HTTP failure object at error level
-      // even when we catch it. Downgrade to warn so diagnostic exports
-      // don't include screen-fulls of GitHub CSP headers.
-      error: (m: unknown) => log.warn(String(m)),
-      debug: (m: unknown) => log.debug(String(m)),
-    };
-  }
-
-  init(): void {
-    if (this.initialised) return;
-    this.initialised = true;
-    // Always allow prereleases. We filter client-side based on channel
-    // preference rather than relying on electron-updater's main-only
-    // /releases/latest path (which 406s when no stable release exists).
-    autoUpdater.allowPrerelease = true;
-    const channel = getStore().get('updateChannel');
-    log.info(`updater initialised, channel=${channel} (allowPrerelease forced on)`);
-  }
-
   async check(): Promise<DesktopUpdateInfo> {
-    this.init();
     const channel = getStore().get('updateChannel');
-    autoUpdater.allowPrerelease = true;
     const current = app.getVersion();
-    if (!app.isPackaged) {
-      log.debug('updater check skipped in unpackaged dev build');
-      return noUpdate(channel, current);
-    }
     try {
-      const result: UpdateCheckResult | null = await autoUpdater.checkForUpdates();
-      if (!result || !result.updateInfo) {
-        return noUpdate(channel, current);
-      }
-      const remote = result.updateInfo.version;
-      const isPrerelease = looksLikePrerelease(remote);
-      // On the `main` channel, surface only true production releases.
-      // We still query the prerelease-aware atom feed (otherwise we'd
-      // hit /releases/latest and 406 on repos that have no stable yet),
-      // then filter here.
-      if (channel === 'main' && isPrerelease) {
+      const all = await listReleases(DESKTOP_OWNER, DESKTOP_REPO);
+      const visible = all.filter((r) => !r.draft);
+      const pool = channel === 'main' ? visible.filter((r) => !r.prerelease) : visible;
+      // GitHub's list is most-recent-first by published_at by default,
+      // but we sort defensively so a draft / out-of-order tag doesn't
+      // throw us off.
+      pool.sort((a, b) => publishedAtMs(b) - publishedAtMs(a));
+      const latest = pool[0];
+      if (!latest) {
         log.info(
-          `updater: latest is prerelease ${remote}; user is on main channel — reporting no-update`,
+          `updater: no releases on ${channel} channel for ${DESKTOP_OWNER}/${DESKTOP_REPO} (visible=${visible.length})`,
         );
         return noUpdate(channel, current);
       }
+      const remoteVersion = normaliseTag(latest.tagName);
+      const available = compareVersions(remoteVersion, current) > 0;
+      log.info(
+        `updater: channel=${channel} current=${current} latest=${remoteVersion} available=${available}`,
+      );
       return {
-        available: compareVersions(remote, current) > 0,
+        available,
         channel,
         currentVersion: current,
-        latestVersion: remote,
-        releaseNotes:
-          typeof result.updateInfo.releaseNotes === 'string'
-            ? result.updateInfo.releaseNotes
-            : null,
-        releaseDate: result.updateInfo.releaseDate ?? null,
+        latestVersion: remoteVersion,
+        releaseNotes: latest.body,
+        releaseDate: latest.publishedAt,
+        downloadUrl: latest.htmlUrl,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      // Quietly suppress the "no production release" failure shape —
-      // it's the expected state for a brand-new repo with only nightly
-      // tags, and not actionable for the user. Anything else gets a
-      // single warn line (no stack trace dump).
-      if (
-        /Unable to find latest version on GitHub/.test(message) ||
-        /Cannot find latest.yml/.test(message) ||
-        /HttpError: 404/.test(message)
-      ) {
-        log.info(`updater: no release feed available (treating as no-update)`);
-      } else {
-        log.warn(`updater check failed: ${message.split('\n')[0] ?? message}`);
-      }
+      log.warn(`updater check failed: ${message.split('\n')[0] ?? message}`);
       return noUpdate(channel, current);
     }
   }
 
+  /**
+   * "Download" opens the release page in the user's browser. We don't
+   * ship a `latest.yml` so electron-updater can't auto-install; until
+   * code-signing + that feed are in place this is the honest path.
+   */
   async download(): Promise<void> {
-    this.init();
-    await autoUpdater.downloadUpdate();
+    const info = await this.check();
+    if (!info.downloadUrl) {
+      log.warn('updater.download called without a known release URL');
+      return;
+    }
+    await shell.openExternal(info.downloadUrl);
   }
 
   quitAndInstall(): void {
-    autoUpdater.quitAndInstall();
+    // No-op until we wire actual electron-updater installs. Kept on the
+    // procedure surface so the renderer's existing "重启并安装" button
+    // doesn't blow up; it now just falls through silently.
+    log.info('updater.quitAndInstall is a no-op until latest.yml is published');
   }
 
   setChannel(channel: 'main' | 'dev'): void {
     getStore().set('updateChannel', channel);
-    // Keep allowPrerelease=true unconditionally; channel is now a
-    // post-fetch filter (see `check`).
-    autoUpdater.allowPrerelease = true;
   }
 }
 
@@ -141,23 +114,33 @@ function noUpdate(channel: 'main' | 'dev', current: string): DesktopUpdateInfo {
     latestVersion: null,
     releaseNotes: null,
     releaseDate: null,
+    downloadUrl: null,
   };
 }
 
-/**
- * Heuristic prerelease detector: semver pre-identifier (`-dev`, `-rc`,
- * `-beta`, …) or our own `nightly-*` tag prefix.
- */
-function looksLikePrerelease(version: string): boolean {
-  const v = version.toLowerCase();
-  if (v.startsWith('nightly-')) return true;
-  return /[-+](?:dev|alpha|beta|rc|next|nightly|preview|pre)\b/.test(v);
+function publishedAtMs(r: GithubRelease): number {
+  if (!r.publishedAt) return 0;
+  const t = Date.parse(r.publishedAt);
+  return Number.isFinite(t) ? t : 0;
 }
 
-/** Lightweight semver-ish compare returning -1/0/1. */
+/**
+ * Strip the leading `v` and any `nightly-` prefix so version comparison
+ * works on consistent shapes. Our nightly tags look like
+ * `nightly-<short-hash>` and our stable tags will look like `v1.8.1`.
+ */
+function normaliseTag(tag: string): string {
+  return tag.replace(/^v/, '').replace(/^nightly-/, 'nightly.');
+}
+
+/**
+ * Semver-ish compare returning -1/0/1. Treats numeric segments as
+ * numbers and falls back to lexicographic comparison for non-numeric
+ * tails (e.g. nightly hashes).
+ */
 function compareVersions(a: string, b: string): number {
-  const pa = a.replace(/^v/, '').split(/[.\-+]/);
-  const pb = b.replace(/^v/, '').split(/[.\-+]/);
+  const pa = a.split(/[.\-+]/);
+  const pb = b.split(/[.\-+]/);
   const len = Math.max(pa.length, pb.length);
   for (let i = 0; i < len; i++) {
     const ai = pa[i] ?? '0';
