@@ -1,15 +1,18 @@
-import Store from 'electron-store';
+import { app } from 'electron';
 import { DEFAULT_STORE, type DesktopStoreSchema } from './schema';
+import { JsonStore } from './json-store';
 
-let instance: Store<DesktopStoreSchema> | null = null;
+let instance: JsonStore<DesktopStoreSchema> | null = null;
 
-export function getStore(): Store<DesktopStoreSchema> {
+export function getStore(): JsonStore<DesktopStoreSchema> {
   if (!instance) {
-    instance = new Store<DesktopStoreSchema>({
+    instance = new JsonStore<DesktopStoreSchema>({
+      cwd: app.getPath('userData'),
       name: 'config',
       defaults: DEFAULT_STORE,
-      clearInvalidConfig: false,
     });
   }
   return instance;
 }
+
+export type Store = JsonStore<DesktopStoreSchema>;

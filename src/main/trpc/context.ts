@@ -1,11 +1,10 @@
-import type Store from 'electron-store';
-import type { DesktopStoreSchema } from '../store/schema';
+import type { Store } from '../store/store';
 import { getStore } from '../store/store';
 import { createLogger, type Logger } from '../util/logger';
 import { getServices, type Services } from '../services';
 
 export interface TrpcContext {
-  store: Store<DesktopStoreSchema>;
+  store: Store;
   log: Logger;
   services: Services;
 }

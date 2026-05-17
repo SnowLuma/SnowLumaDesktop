@@ -48,7 +48,6 @@
     "@trpc/server": "^11.7.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "electron-store": "^11.0.0",
     "electron-trpc": "^0.7.1",
     "electron-updater": "^6.6.5",
     "i18next": "^25.4.0",
