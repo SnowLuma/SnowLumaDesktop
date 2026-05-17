@@ -57,7 +57,10 @@ export const DEFAULT_STORE: DesktopStoreSchema = {
   activeCoreVersion: null,
   updateChannel: 'main',
   // Priority: smaller wins. 0 = first tried, larger = fallback. The
-  // built-in GitHub mirror starts at 0 so a clean install defaults to it.
+  // built-in GitHub mirror starts at 0 so a clean install defaults to
+  // it. The gh-proxy.org family ships disabled — users in mainland
+  // China who can't reach github.com directly can flip one on without
+  // having to type a URL template by hand.
   mirrors: [
     {
       id: 'github',
@@ -65,6 +68,34 @@ export const DEFAULT_STORE: DesktopStoreSchema = {
       template: 'https://github.com/SnowLuma/SnowLuma/releases/download/{version}/{file}',
       priority: 0,
       enabled: true,
+    },
+    {
+      id: 'gh-proxy',
+      name: 'gh-proxy.org',
+      template: 'https://gh-proxy.org/https://github.com/SnowLuma/SnowLuma/releases/download/{version}/{file}',
+      priority: 10,
+      enabled: false,
+    },
+    {
+      id: 'gh-proxy-hk',
+      name: 'gh-proxy.org (HK)',
+      template: 'https://hk.gh-proxy.org/https://github.com/SnowLuma/SnowLuma/releases/download/{version}/{file}',
+      priority: 11,
+      enabled: false,
+    },
+    {
+      id: 'gh-proxy-cdn',
+      name: 'gh-proxy.org (CDN)',
+      template: 'https://cdn.gh-proxy.org/https://github.com/SnowLuma/SnowLuma/releases/download/{version}/{file}',
+      priority: 12,
+      enabled: false,
+    },
+    {
+      id: 'gh-proxy-edgeone',
+      name: 'gh-proxy.org (EdgeOne)',
+      template: 'https://edgeone.gh-proxy.org/https://github.com/SnowLuma/SnowLuma/releases/download/{version}/{file}',
+      priority: 13,
+      enabled: false,
     },
   ],
   webuiCredentials: null,
