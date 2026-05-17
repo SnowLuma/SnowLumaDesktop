@@ -1,4 +1,5 @@
 import {
+  createHashHistory,
   createRootRoute,
   createRoute,
   createRouter,
@@ -148,9 +149,17 @@ const routeTree = rootRoute.addChildren([
   appRoute.addChildren([appBots, appBotsDetail, appLogs, appSettings, appDiagnostic, appUpdate]),
 ]);
 
+// Hash-based history. Electron loads the renderer over file:// whose
+// pathname is something like `/C:/Users/…/index.html` — TanStack
+// Router can't reconcile that with our `/wizard/welcome` route table
+// and falls through to the not-found component (the "路径不存在"
+// screen the user saw on first launch). With hash history the router
+// only looks at the part after `#`, so the file:// vs http:// /
+// vite-preview difference disappears.
 export const router = createRouter({
   routeTree,
   defaultPreload: 'intent',
+  history: createHashHistory(),
 });
 
 declare module '@tanstack/react-router' {
