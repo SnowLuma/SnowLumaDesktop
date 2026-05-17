@@ -13,7 +13,8 @@ import {
   SelectValue,
   Switch,
 } from '@snowluma/ui';
-import { Play, CheckCircle2 } from 'lucide-react';
+import { Play, CheckCircle2, Loader2 } from 'lucide-react';
+import { StatusDot } from '@snowluma/ui';
 import { trpc } from '../../lib/trpc';
 import { useWizardNavigate } from './wizard-shell';
 
@@ -101,9 +102,16 @@ export function AddBotStep() {
             </Button>
           )}
           {onlineBot && (
-            <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/5 p-3 text-sm">
-              <CheckCircle2 className="size-5 text-success" />
+            <div className="flex items-center gap-3 rounded-lg border border-success/30 bg-success/5 p-3 text-sm">
+              <StatusDot tone="success" size="md" pulse />
+              <CheckCircle2 className="size-4 text-success" />
               <span>{t('wizard.addBot.online', { uin: onlineBot.uin })}</span>
+            </div>
+          )}
+          {!onlineBot && (upsert.isPending || startBot.isPending) && (
+            <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs text-muted-foreground">
+              <Loader2 className="size-4 animate-spin text-warning" />
+              <span>{t('wizard.addBot.launching')}</span>
             </div>
           )}
           <p className="text-xs text-muted-foreground">{t('wizard.addBot.loginHint')}</p>

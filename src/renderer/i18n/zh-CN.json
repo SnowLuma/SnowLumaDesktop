@@ -102,7 +102,7 @@
       "hideAfterLoginHint": "推荐打开，避免 QQ 聊天列表被当作普通 QQ 用。",
       "launch": "启动 Bot",
       "launching": "启动中…",
-      "online": "🟢 Bot {{uin}} 已在线",
+      "online": "Bot {{uin}} 已在线",
       "loginHint": "QQ 窗口会弹出，请扫码或输入密码完成登录。",
       "skipForNow": "暂不添加，进主界面"
     },

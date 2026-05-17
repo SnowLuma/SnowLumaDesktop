@@ -1,8 +1,8 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "@snowluma/ui/styles/theme.css";
 
-/* Scan @snowluma/ui sources for utility class usage. The package is
-   symlinked from node_modules to packages/ui (via pnpm `link:`). */
+/* Scan @snowluma/ui sources for utility class usage. */
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
 
 @layer base {
@@ -17,5 +17,12 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.5;
+    overflow: hidden;
   }
+}
+
+/* App-level utilities used by chrome layouts. */
+@layer utilities {
+  .h-chrome { height: var(--chrome-height); }
+  .min-h-chrome { min-height: var(--chrome-height); }
 }

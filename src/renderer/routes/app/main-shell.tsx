@@ -1,9 +1,21 @@
 import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
+import { useEffect } from 'react';
+import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { cn, ScrollArea } from '@snowluma/ui';
-import { Bot, FileText, Settings, Download, Wrench, RefreshCw } from 'lucide-react';
+import {
+  cn,
+  ScrollArea,
+  StatusDot,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@snowluma/ui';
+import { Bot, FileText, Settings, Download, Wrench, Snowflake } from 'lucide-react';
 import { trpc } from '../../lib/trpc';
 import { ToastBridge } from './toast-bridge';
+import { ThemeToggle } from '../../components/theme-toggle';
+import { SidebarToggle } from '../../components/sidebar-toggle';
+import { navSidebarCollapsedAtom } from '../../state/atoms';
 
 const NAV_ITEMS = [
   { to: '/app/bots', labelKey: 'main.nav.bots', icon: Bot },
@@ -19,52 +31,143 @@ export function MainShell() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const appInfo = trpc.app.info.useQuery();
   const coreState = trpc.core.state.useQuery(undefined, { refetchInterval: 2_000 });
+  const [collapsed, setCollapsed] = useAtom(navSidebarCollapsedAtom);
+
+  // ⌘B / Ctrl+B toggle.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setCollapsed((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [setCollapsed]);
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
-      <aside className="flex w-56 flex-col border-r border-border bg-sidebar text-sidebar-foreground">
-        <header className="border-b border-sidebar-border px-4 py-3">
-          <div className="text-sm font-semibold">❄️ {t('app.name')}</div>
-          <div className="mt-0.5 text-[10px] text-muted-foreground">v{appInfo.data?.version ?? '?'}</div>
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      <aside
+        className={cn(
+          'relative flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out',
+          collapsed ? 'w-14' : 'w-56',
+        )}
+      >
+        <header
+          className={cn(
+            'flex h-chrome shrink-0 items-center gap-2 border-b border-sidebar-border px-3',
+            collapsed && 'justify-center px-2',
+          )}
+        >
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
+            <Snowflake className="size-4" />
+          </div>
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold leading-none">SnowLuma</div>
+              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                v{appInfo.data?.version ?? '?'}
+              </div>
+            </div>
+          )}
+          {!collapsed && <SidebarToggle collapsed={false} onToggle={() => setCollapsed(true)} />}
         </header>
-        <nav className="flex-1 px-2 py-3">
+
+        <nav className="flex-1 overflow-hidden p-2">
           <ScrollArea className="h-full">
             <ul className="space-y-0.5">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const active = path.startsWith(item.to);
+                const button = (
+                  <button
+                    type="button"
+                    onClick={() => navigate({ to: item.to })}
+                    className={cn(
+                      'flex w-full items-center gap-2.5 rounded-md text-left text-sm font-medium transition-colors',
+                      collapsed ? 'h-9 justify-center px-0' : 'h-9 px-2.5',
+                      active
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-xs'
+                        : 'text-muted-foreground hover:bg-sidebar-accent/40 hover:text-sidebar-foreground',
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    {!collapsed && <span className="truncate">{t(item.labelKey)}</span>}
+                  </button>
+                );
                 return (
                   <li key={item.to}>
-                    <button
-                      type="button"
-                      onClick={() => navigate({ to: item.to })}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition',
-                        active
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                          : 'hover:bg-sidebar-accent/40',
-                      )}
-                    >
-                      <Icon className="size-4" />
-                      <span>{t(item.labelKey)}</span>
-                    </button>
+                    {collapsed ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>{button}</TooltipTrigger>
+                        <TooltipContent side="right">{t(item.labelKey)}</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      button
+                    )}
                   </li>
                 );
               })}
             </ul>
           </ScrollArea>
         </nav>
-        <footer className="border-t border-sidebar-border px-3 py-2 text-[11px] text-muted-foreground">
-          <div className="flex items-center gap-1.5">
-            <span className={cn('inline-block size-1.5 rounded-full', coreStatusColor(coreState.data?.status))} />
-            <span>core: {coreState.data?.status ?? '...'}</span>
-            {coreState.data?.activeVersion && (
-              <span className="text-muted-foreground/70">· {coreState.data.activeVersion}</span>
-            )}
-          </div>
+
+        <footer
+          className={cn(
+            'flex h-chrome shrink-0 items-center gap-2 border-t border-sidebar-border px-3',
+            collapsed && 'justify-center px-2',
+          )}
+        >
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setCollapsed(false)}
+                  className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent/40 hover:text-foreground"
+                  aria-label="展开侧栏"
+                >
+                  <SidebarToggle collapsed onToggle={() => setCollapsed(false)} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">展开侧栏</TooltipContent>
+            </Tooltip>
+          ) : (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <StatusDot tone={coreStatusTone(coreState.data?.status)} pulse={coreState.data?.status === 'running'} />
+                    <span className="truncate">core · {coreStatusLabel(coreState.data?.status)}</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <div className="space-y-1">
+                    <div>
+                      状态：<span className="font-mono">{coreState.data?.status ?? '...'}</span>
+                    </div>
+                    {coreState.data?.activeVersion && (
+                      <div>
+                        版本：<span className="font-mono">{coreState.data.activeVersion}</span>
+                      </div>
+                    )}
+                    {coreState.data?.webuiPort && (
+                      <div>
+                        webui：<span className="font-mono">127.0.0.1:{coreState.data.webuiPort}</span>
+                      </div>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+              <div className="ml-auto">
+                <ThemeToggle compact />
+              </div>
+            </>
+          )}
         </footer>
       </aside>
-      <main className="flex flex-1 flex-col overflow-hidden">
+
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Outlet />
       </main>
       <ToastBridge />
@@ -72,18 +175,67 @@ export function MainShell() {
   );
 }
 
-function coreStatusColor(status?: string): string {
+function coreStatusTone(status?: string): 'success' | 'warning' | 'destructive' | 'muted' {
   switch (status) {
     case 'running':
-      return 'bg-success';
+      return 'success';
     case 'starting':
     case 'restarting':
-      return 'bg-warning';
+      return 'warning';
     case 'crashed':
-      return 'bg-destructive';
+      return 'destructive';
     default:
-      return 'bg-muted-foreground';
+      return 'muted';
   }
 }
 
-void RefreshCw; // reserved for future inline refresh affordance
+function coreStatusLabel(status?: string): string {
+  switch (status) {
+    case 'stopped':
+      return '已停止';
+    case 'starting':
+      return '启动中';
+    case 'running':
+      return '运行中';
+    case 'crashed':
+      return '已崩溃';
+    case 'restarting':
+      return '重启中';
+    case 'no-version-active':
+      return '未选定版本';
+    default:
+      return status ?? '加载中';
+  }
+}
+
+/**
+ * Reusable top-bar shared by every main view. Keeps height constant
+ * (h-chrome → 52px) so the sidebar header/footer / view header all align.
+ */
+interface ViewHeaderProps {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  icon?: React.ReactNode;
+  leading?: React.ReactNode;
+  actions?: React.ReactNode;
+}
+
+export function ViewHeader({ title, subtitle, icon, leading, actions }: ViewHeaderProps) {
+  return (
+    <header className="flex h-chrome shrink-0 items-center gap-3 border-b border-border bg-card px-4">
+      {leading}
+      {icon && (
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          {icon}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold leading-tight">{title}</div>
+        {subtitle && (
+          <div className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">{subtitle}</div>
+        )}
+      </div>
+      {actions && <div className="flex items-center gap-1">{actions}</div>}
+    </header>
+  );
+}

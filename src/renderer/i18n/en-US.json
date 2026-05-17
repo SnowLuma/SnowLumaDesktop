@@ -93,7 +93,7 @@
       "hideAfterLoginHint": "Stops users from treating QQ as a plain client.",
       "launch": "Launch Bot",
       "launching": "Launching…",
-      "online": "🟢 Bot {{uin}} online",
+      "online": "Bot {{uin}} online",
       "loginHint": "A QQ window will open; scan QR or enter password to log in.",
       "skipForNow": "Skip — go to main UI"
     },

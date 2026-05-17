@@ -22,17 +22,29 @@ import { SettingsView } from '../routes/app/settings';
 import { DiagnosticView } from '../routes/app/diagnostic';
 import { UpdateView } from '../routes/app/update';
 import { WizardShell } from '../routes/wizard/wizard-shell';
+import { NotFound } from '../components/not-found';
+import { AppError } from '../components/app-error';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
+  notFoundComponent: NotFound,
+  errorComponent: ({ error, reset }) => <AppError error={error} reset={reset} />,
 });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   beforeLoad: async () => {
-    const { completedAt } = await trpcVanilla.wizard.state.query();
-    throw redirect({ to: completedAt ? '/app/bots' : '/wizard/welcome' });
+    try {
+      const { completedAt } = await trpcVanilla.wizard.state.query();
+      throw redirect({ to: completedAt ? '/app/bots' : '/wizard/welcome' });
+    } catch (err) {
+      // Redirects throw — let them through. Anything else routes to bots
+      // so a broken tRPC bridge doesn't trap the user on a blank index.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((err as any)?.isRedirect) throw err;
+      throw redirect({ to: '/app/bots' });
+    }
   },
   component: () => <Navigate to="/wizard/welcome" />,
 });

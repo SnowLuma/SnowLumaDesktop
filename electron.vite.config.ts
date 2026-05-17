@@ -103,9 +103,17 @@ export default defineConfig({
       },
     },
     resolve: {
+      // pnpm `link:` to packages/ui leaves packages/ui/node_modules with
+      // its own copy of React. Without dedupe the renderer bundle ends
+      // up with two React instances and TooltipProvider explodes with
+      // "Cannot read properties of null (reading 'useRef')" at first
+      // render. Force every importer to share Desktop's React.
+      dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
       alias: {
         '@renderer': resolve(root, 'src/renderer'),
         ...sharedAlias,
+        react: resolve(root, 'node_modules/react'),
+        'react-dom': resolve(root, 'node_modules/react-dom'),
       },
     },
     server: {

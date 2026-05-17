@@ -1,8 +1,10 @@
 import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, cn } from '@snowluma/ui';
+import { Button, cn, ScrollArea } from '@snowluma/ui';
+import { Snowflake, ChevronRight } from 'lucide-react';
 import { trpc } from '../../lib/trpc';
+import { ThemeToggle } from '../../components/theme-toggle';
 import type { WizardStep } from '@shared/types';
 
 const STEP_ORDER: { step: WizardStep; path: string; labelKey: string }[] = [
@@ -32,7 +34,6 @@ export function WizardShell() {
 
   useEffect(() => {
     if (!stateQuery.data) return;
-    // 12b · resume from last persisted step if user landed on a different route
     if (currentPath === '/wizard' || currentPath === '/wizard/') {
       const target = STEP_ORDER.find((s) => s.step === persistedStep) ?? STEP_ORDER[0]!;
       void navigate({ to: target.path });
@@ -41,18 +42,24 @@ export function WizardShell() {
 
   function go(targetIndex: number) {
     const target = STEP_ORDER[Math.max(0, Math.min(STEP_ORDER.length - 1, targetIndex))]!;
-    setStep.mutate(
-      { step: target.step },
-      { onSuccess: () => void utils.wizard.state.invalidate() },
-    );
+    setStep.mutate({ step: target.step }, { onSuccess: () => void utils.wizard.state.invalidate() });
     void navigate({ to: target.path });
   }
 
+  const progress = Math.round(((currentIndex + 1) / STEP_ORDER.length) * 100);
+
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="border-b border-border bg-card px-8 py-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-base font-semibold">❄️ {t('app.name')}</h1>
+    <div className="flex h-screen flex-col bg-background text-foreground">
+      <header className="flex h-chrome shrink-0 items-center gap-3 border-b border-border bg-card px-5">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
+          <Snowflake className="size-4" />
+        </div>
+        <div className="min-w-0">
+          <h1 className="truncate text-sm font-semibold leading-tight">{t('app.name')}</h1>
+          <p className="mt-0.5 truncate text-[10px] text-muted-foreground">首次设置向导</p>
+        </div>
+        <div className="ml-auto flex items-center gap-1">
+          <ThemeToggle compact />
           <Button
             variant="ghost"
             size="sm"
@@ -68,39 +75,62 @@ export function WizardShell() {
             {t('wizard.skip')}
           </Button>
         </div>
-        <ol className="mt-4 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+      </header>
+
+      {/* Progress bar */}
+      <div className="h-0.5 shrink-0 bg-border">
+        <div
+          className="h-full bg-primary transition-[width] duration-500 ease-out"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      {/* Stepper */}
+      <ScrollArea className="shrink-0">
+        <ol className="flex items-center gap-1.5 border-b border-border bg-card/40 px-5 py-2 text-[11px] text-muted-foreground">
           {STEP_ORDER.map((s, i) => {
             const reached = i <= Math.max(currentIndex, persistedIndex);
             const isCurrent = i === currentIndex;
             return (
-              <li key={s.step} className="flex items-center gap-1.5">
+              <li key={s.step} className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
                   disabled={i > persistedIndex}
                   onClick={() => go(i)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 transition',
-                    isCurrent && 'bg-primary text-primary-foreground',
-                    !isCurrent && reached && 'bg-accent text-accent-foreground',
-                    !reached && 'opacity-60',
+                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors',
+                    isCurrent && 'bg-primary text-primary-foreground shadow-sm',
+                    !isCurrent && reached && 'bg-accent text-accent-foreground hover:bg-accent/80',
+                    !reached && 'opacity-50',
+                    'disabled:cursor-not-allowed',
                   )}
                 >
-                  <span className="inline-flex size-4 items-center justify-center rounded-full border border-current text-[10px]">
+                  <span
+                    className={cn(
+                      'inline-flex size-4 items-center justify-center rounded-full border text-[9px] font-semibold',
+                      isCurrent ? 'border-primary-foreground' : 'border-current',
+                    )}
+                  >
                     {i + 1}
                   </span>
-                  <span>{t(s.labelKey)}</span>
+                  <span className="whitespace-nowrap">{t(s.labelKey)}</span>
                 </button>
-                {i < STEP_ORDER.length - 1 && <span aria-hidden="true">›</span>}
+                {i < STEP_ORDER.length - 1 && (
+                  <ChevronRight className="size-3 shrink-0 text-muted-foreground/40" />
+                )}
               </li>
             );
           })}
         </ol>
-      </header>
-      <main className="flex flex-1 flex-col px-8 py-10">
-        <div className="mx-auto w-full max-w-2xl">
-          <Outlet />
-        </div>
-      </main>
+      </ScrollArea>
+
+      <ScrollArea className="flex-1">
+        <main className="px-6 py-8 lg:py-12">
+          <div className="mx-auto w-full max-w-2xl animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
+            <Outlet />
+          </div>
+        </main>
+      </ScrollArea>
     </div>
   );
 }
@@ -113,10 +143,7 @@ export function useWizardNavigate() {
   function next(currentStep: WizardStep) {
     const i = STEP_ORDER.findIndex((s) => s.step === currentStep);
     const target = STEP_ORDER[Math.min(STEP_ORDER.length - 1, i + 1)]!;
-    setStep.mutate(
-      { step: target.step },
-      { onSuccess: () => void utils.wizard.state.invalidate() },
-    );
+    setStep.mutate({ step: target.step }, { onSuccess: () => void utils.wizard.state.invalidate() });
     void navigate({ to: target.path });
   }
   function back(currentStep: WizardStep) {
@@ -126,3 +153,4 @@ export function useWizardNavigate() {
   }
   return { next, back };
 }
+

@@ -9,9 +9,12 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  ScrollArea,
+  Separator,
 } from '@snowluma/ui';
-import { Download, RefreshCw } from 'lucide-react';
+import { Download, RefreshCw, CheckCircle2, Sparkles, RotateCw } from 'lucide-react';
 import { trpc } from '../../lib/trpc';
+import { ViewHeader } from './main-shell';
 
 export function UpdateView() {
   const { t } = useTranslation();
@@ -31,67 +34,109 @@ export function UpdateView() {
   const available = info?.available ?? false;
 
   return (
-    <div className="flex h-full flex-col p-6">
-      <header className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{t('main.update.title')}</h2>
-        <Button size="sm" variant="ghost" onClick={() => check.refetch()}>
-          <RefreshCw className="size-4" />
-          {t('main.update.recheck')}
-        </Button>
-      </header>
-      <Card className="max-w-xl">
-        <CardContent className="space-y-4 p-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <div className="text-sm font-medium">{t('main.update.channelLabel')}</div>
-              <p className="text-xs text-muted-foreground">{t('main.update.channelHint')}</p>
-            </div>
-            <Select
-              value={channel.data ?? 'main'}
-              onValueChange={(v) => setChannel.mutate({ channel: v as 'main' | 'dev' })}
-            >
-              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="main">main</SelectItem>
-                <SelectItem value="dev">dev</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <hr className="border-border" />
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm">{t('main.update.current')}</span>
-              <Badge variant="secondary">{info?.currentVersion ?? '?'}</Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm">{t('main.update.latest')}</span>
-              <Badge variant={available ? 'success' : 'outline'}>
-                {info?.latestVersion ?? '?'}
-              </Badge>
-            </div>
-            {info?.releaseDate && (
-              <div className="text-xs text-muted-foreground">{info.releaseDate}</div>
-            )}
-            {info?.releaseNotes && (
-              <details className="mt-2 text-xs">
-                <summary className="cursor-pointer text-muted-foreground">{t('main.update.changelog')}</summary>
-                <pre className="mt-2 whitespace-pre-wrap rounded-md bg-muted p-3 text-[11px] text-muted-foreground">{info.releaseNotes}</pre>
-              </details>
-            )}
-          </div>
-          {available && (
-            <div className="flex gap-2">
-              <Button onClick={() => download.mutate()} disabled={download.isPending}>
-                <Download className="size-4" />
-                {download.isPending ? t('main.update.downloading') : t('main.update.download')}
-              </Button>
-              <Button variant="outline" onClick={() => install.mutate()}>
-                {t('main.update.restartInstall')}
-              </Button>
-            </div>
+    <div className="flex h-full flex-col">
+      <ViewHeader
+        title={t('main.update.title')}
+        icon={<Download className="size-4" />}
+        actions={
+          <Button size="sm" variant="ghost" onClick={() => check.refetch()} disabled={check.isFetching}>
+            <RefreshCw className={`size-4 ${check.isFetching ? 'animate-spin' : ''}`} />
+            {t('main.update.recheck')}
+          </Button>
+        }
+      />
+      <ScrollArea className="flex-1">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6 lg:p-8">
+          {/* Current state card */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <div
+                  className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${
+                    available ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {available ? <Sparkles className="size-6" /> : <CheckCircle2 className="size-6" />}
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h2 className="text-base font-semibold tracking-tight">
+                    {available ? '有新版本可用' : '已是最新版本'}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                    <span>
+                      {t('main.update.current')}：
+                      <Badge variant="outline" className="ml-1">
+                        {info?.currentVersion ?? '?'}
+                      </Badge>
+                    </span>
+                    {available && (
+                      <span className="flex items-center gap-1">
+                        →
+                        <Badge variant="success">{info?.latestVersion ?? '?'}</Badge>
+                      </span>
+                    )}
+                  </div>
+                  {info?.releaseDate && (
+                    <p className="text-xs text-muted-foreground">发布于 {info.releaseDate}</p>
+                  )}
+                </div>
+              </div>
+              {available && (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Button onClick={() => download.mutate()} disabled={download.isPending}>
+                    <Download className="size-4" />
+                    {download.isPending ? t('main.update.downloading') : t('main.update.download')}
+                  </Button>
+                  <Button variant="outline" onClick={() => install.mutate()}>
+                    <RotateCw className="size-4" />
+                    {t('main.update.restartInstall')}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Channel selector */}
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0 space-y-0.5">
+                  <h3 className="text-sm font-medium">{t('main.update.channelLabel')}</h3>
+                  <p className="text-xs leading-relaxed text-muted-foreground">{t('main.update.channelHint')}</p>
+                </div>
+                <Select
+                  value={channel.data ?? 'main'}
+                  onValueChange={(v) => setChannel.mutate({ channel: v as 'main' | 'dev' })}
+                >
+                  <SelectTrigger className="w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="main">main · 稳定</SelectItem>
+                    <SelectItem value="dev">dev · 每日预览</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Changelog */}
+          {info?.releaseNotes && (
+            <Card>
+              <CardContent className="space-y-3 p-6">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-medium">{t('main.update.changelog')}</h3>
+                  <Badge variant="outline">{info.latestVersion}</Badge>
+                </div>
+                <Separator />
+                <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted-foreground">
+                  {info.releaseNotes}
+                </pre>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </ScrollArea>
     </div>
   );
 }

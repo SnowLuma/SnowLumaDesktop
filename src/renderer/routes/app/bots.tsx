@@ -19,14 +19,47 @@ import {
   Avatar,
   AvatarFallback,
   Separator,
+  StatusDot,
+  EmptyState,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  Badge,
   cn,
 } from '@snowluma/ui';
-import { Plus, Pencil, Trash2, Play, Pause, RotateCw, Inbox, Search } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Play,
+  Pause,
+  RotateCw,
+  Inbox,
+  Bot as BotIcon,
+  Filter,
+  PanelRightClose,
+  PanelRightOpen,
+  CheckCircle2,
+  AlertTriangle,
+  Loader2,
+  CircleDashed,
+  Hand,
+} from 'lucide-react';
 import { trpc } from '../../lib/trpc';
-import { trashEntriesAtom } from '../../state/atoms';
+import { trashEntriesAtom, botSidebarCollapsedAtom } from '../../state/atoms';
 import type { BotRecord } from '@shared/types';
+import { ViewHeader } from './main-shell';
 
 const UNDO_WINDOW_MS = 5_000;
+
+type BotStatus =
+  | 'offline'
+  | 'launching-qq'
+  | 'awaiting-login'
+  | 'online'
+  | 'reconnecting'
+  | 'needs-attention'
+  | 'user-managed';
 
 export function BotsView() {
   const { t } = useTranslation();
@@ -45,119 +78,249 @@ export function BotsView() {
 
   const [renameTarget, setRenameTarget] = useState<BotRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BotRecord | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useAtom(botSidebarCollapsedAtom);
+  const [filter, setFilter] = useState<'all' | 'online' | 'offline'>('all');
 
   const selectedRecord = bots.data?.find((b) => b.uin === routeUin) ?? bots.data?.[0];
+  const filtered = bots.data?.filter((b) => {
+    if (filter === 'all') return true;
+    const state = states.data?.find((s) => s.uin === b.uin);
+    return filter === 'online' ? state?.status === 'online' : state?.status !== 'online';
+  });
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      <aside className="flex w-64 flex-col border-r border-border bg-sidebar/40">
-        <header className="flex items-center justify-between border-b border-border px-3 py-2">
-          <span className="text-sm font-medium">{t('main.bots.title')}</span>
-          <Button size="icon-sm" variant="ghost" onClick={() => navigate({ to: '/app/bots' })}>
-            <Plus className="size-4" />
-          </Button>
-        </header>
-        <ScrollArea className="flex-1">
-          <ul className="space-y-0.5 p-2">
-            {bots.data?.map((bot) => {
-              const state = states.data?.find((s) => s.uin === bot.uin);
-              const selected = selectedRecord?.uin === bot.uin;
-              return (
-                <li key={bot.uin}>
-                  <button
-                    type="button"
-                    onClick={() => navigate({ to: '/app/bots/$uin', params: { uin: bot.uin } })}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition',
-                      selected
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                        : 'hover:bg-sidebar-accent/40',
-                    )}
-                  >
-                    <Avatar size={28}>
-                      <AvatarFallback>{(bot.customName || bot.uin).slice(0, 2)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{bot.customName || bot.uin}</div>
-                      <div className="truncate text-[10px] text-muted-foreground">{bot.uin}</div>
-                    </div>
-                    <span className={cn('size-2 rounded-full', botStatusColor(state?.status))} />
-                  </button>
-                </li>
-              );
-            })}
-            {bots.data?.length === 0 && (
-              <div className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
-                {t('main.bots.empty')}
-              </div>
-            )}
-          </ul>
-        </ScrollArea>
-        <ImportOrphans />
+    <div className="flex h-full min-h-0 flex-1">
+      <aside
+        className={cn(
+          'flex shrink-0 flex-col border-r border-border bg-sidebar/30 transition-[width] duration-200 ease-out',
+          sidebarCollapsed ? 'w-0 -ml-px' : 'w-64',
+        )}
+        aria-hidden={sidebarCollapsed}
+      >
+        {!sidebarCollapsed && (
+          <>
+            <ViewHeader
+              title={t('main.bots.title')}
+              icon={<BotIcon className="size-4" />}
+              actions={
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const next: typeof filter = filter === 'all' ? 'online' : filter === 'online' ? 'offline' : 'all';
+                          setFilter(next);
+                        }}
+                      >
+                        <Filter className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      过滤：{filter === 'all' ? '全部' : filter === 'online' ? '仅在线' : '仅离线'}
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => navigate({ to: '/wizard/add-bot' })}
+                      >
+                        <Plus className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">添加 Bot</TooltipContent>
+                  </Tooltip>
+                </>
+              }
+            />
+            <ScrollArea className="flex-1">
+              <ul className="space-y-0.5 p-2">
+                {filtered?.length === 0 && (
+                  <EmptyState
+                    className="my-4"
+                    icon={<Inbox className="size-5" />}
+                    title={filter === 'all' ? t('main.bots.empty') : '无匹配 Bot'}
+                  />
+                )}
+                {filtered?.map((bot) => {
+                  const state = states.data?.find((s) => s.uin === bot.uin);
+                  const selected = selectedRecord?.uin === bot.uin;
+                  return (
+                    <li key={bot.uin}>
+                      <button
+                        type="button"
+                        onClick={() => navigate({ to: '/app/bots/$uin', params: { uin: bot.uin } })}
+                        className={cn(
+                          'group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors',
+                          selected
+                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                            : 'hover:bg-sidebar-accent/40',
+                        )}
+                      >
+                        <Avatar size={32}>
+                          <AvatarFallback>{(bot.customName || bot.uin).slice(0, 2)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">{bot.customName || bot.uin}</div>
+                          <div className="truncate text-[10px] text-muted-foreground">
+                            UIN {bot.uin}
+                          </div>
+                        </div>
+                        <StatusDot tone={botStatusTone(state?.status)} pulse={state?.status === 'online'} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </ScrollArea>
+            <ImportOrphans />
+          </>
+        )}
       </aside>
-      <section className="flex flex-1 flex-col overflow-hidden">
+
+      <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {selectedRecord ? (
           <>
-            <header className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
-              <div className="flex items-center gap-3">
-                <Avatar size={32}>
+            <ViewHeader
+              title={selectedRecord.customName || selectedRecord.uin}
+              subtitle={
+                <span className="flex items-center gap-2">
+                  <span>UIN {selectedRecord.uin}</span>
+                  <span className="text-muted-foreground/50">·</span>
+                  <BotStatusBadge status={states.data?.find((s) => s.uin === selectedRecord.uin)?.status} />
+                </span>
+              }
+              leading={
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() => setSidebarCollapsed((v) => !v)}
+                      aria-label="切换 Bot 列表"
+                    >
+                      {sidebarCollapsed ? (
+                        <PanelRightOpen className="size-4" />
+                      ) : (
+                        <PanelRightClose className="size-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {sidebarCollapsed ? '展开 Bot 列表' : '收起 Bot 列表'}
+                  </TooltipContent>
+                </Tooltip>
+              }
+              icon={
+                <Avatar size={28}>
                   <AvatarFallback>{(selectedRecord.customName || selectedRecord.uin).slice(0, 2)}</AvatarFallback>
                 </Avatar>
-                <div>
-                  <div className="text-sm font-medium">{selectedRecord.customName || selectedRecord.uin}</div>
-                  <div className="text-[11px] text-muted-foreground">UIN {selectedRecord.uin}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => startBot.mutate({ uin: selectedRecord.uin })}>
-                  <Play className="size-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => stopBot.mutate({ uin: selectedRecord.uin })}>
-                  <Pause className="size-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => webuiUrl.refetch()}>
-                  <RotateCw className="size-4" />
-                </Button>
-                <Separator orientation="vertical" className="mx-2 h-6" />
-                <Button size="sm" variant="ghost" onClick={() => setRenameTarget(selectedRecord)}>
-                  <Pencil className="size-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(selectedRecord)}>
-                  <Trash2 className="size-4 text-destructive" />
-                </Button>
-              </div>
-            </header>
-            <div className="flex flex-1 overflow-hidden">
+              }
+              actions={
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon-sm" variant="ghost" onClick={() => startBot.mutate({ uin: selectedRecord.uin })}>
+                        <Play className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">启动</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon-sm" variant="ghost" onClick={() => stopBot.mutate({ uin: selectedRecord.uin })}>
+                        <Pause className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">暂停</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon-sm" variant="ghost" onClick={() => webuiUrl.refetch()}>
+                        <RotateCw className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">刷新 webui</TooltipContent>
+                  </Tooltip>
+                  <Separator orientation="vertical" className="mx-1 h-5" />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon-sm" variant="ghost" onClick={() => setRenameTarget(selectedRecord)}>
+                        <Pencil className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">重命名</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon-sm" variant="ghost" onClick={() => setDeleteTarget(selectedRecord)}>
+                        <Trash2 className="size-4 text-destructive" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">删除</TooltipContent>
+                  </Tooltip>
+                </>
+              }
+            />
+            <div className="relative flex flex-1 min-h-0">
               {webuiUrl.data?.url ? (
                 <iframe
                   title="webui"
                   src={webuiUrl.data.url}
-                  className="flex-1 border-0"
+                  className="absolute inset-0 size-full border-0"
                   sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
                 />
               ) : (
-                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                  {webuiUrl.isFetching ? t('main.bots.loadingWebui') : t('main.bots.webuiUnavailable')}
+                <div className="m-auto p-8">
+                  <EmptyState
+                    icon={<Loader2 className={cn('size-5', webuiUrl.isFetching && 'animate-spin')} />}
+                    title={webuiUrl.isFetching ? t('main.bots.loadingWebui') : t('main.bots.webuiUnavailable')}
+                    description={webuiUrl.isFetching ? undefined : '请稍后再刷新，或检查 core 是否在运行。'}
+                  />
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div className="flex flex-1 items-center justify-center px-8">
-            <Card className="max-w-md">
-              <CardContent className="space-y-4 p-6 text-center">
-                <Inbox className="mx-auto size-8 text-muted-foreground" />
-                <h2 className="text-base font-semibold">{t('main.bots.banner')}</h2>
-                <p className="text-sm text-muted-foreground">{t('main.bots.bannerHint')}</p>
-                <Button onClick={() => navigate({ to: '/wizard/add-bot' })}>
-                  <Plus className="size-4" />
-                  {t('main.bots.addBot')}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+          <>
+            <ViewHeader
+              title={t('main.bots.title')}
+              icon={<BotIcon className="size-4" />}
+              leading={
+                sidebarCollapsed ? (
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() => setSidebarCollapsed(false)}
+                    aria-label="展开 Bot 列表"
+                  >
+                    <PanelRightOpen className="size-4" />
+                  </Button>
+                ) : undefined
+              }
+            />
+            <div className="flex flex-1 items-center justify-center px-8">
+              <Card className="w-full max-w-md">
+                <CardContent className="space-y-4 p-6 text-center">
+                  <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                    <Inbox className="size-6" />
+                  </div>
+                  <h2 className="text-base font-semibold">{t('main.bots.banner')}</h2>
+                  <p className="text-sm text-muted-foreground">{t('main.bots.bannerHint')}</p>
+                  <Button onClick={() => navigate({ to: '/wizard/add-bot' })}>
+                    <Plus className="size-4" />
+                    {t('main.bots.addBot')}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </>
         )}
       </section>
+
       {renameTarget && (
         <RenameDialog
           bot={renameTarget}
@@ -169,28 +332,47 @@ export function BotsView() {
         />
       )}
       {deleteTarget && (
-        <DeleteDialog
-          bot={deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-        />
+        <DeleteDialog bot={deleteTarget} onClose={() => setDeleteTarget(null)} />
       )}
     </div>
   );
 }
 
-function botStatusColor(status?: string): string {
+function botStatusTone(status?: BotStatus | string): 'success' | 'warning' | 'destructive' | 'muted' | 'info' {
   switch (status) {
     case 'online':
-      return 'bg-success';
+      return 'success';
     case 'awaiting-login':
     case 'launching-qq':
     case 'reconnecting':
-      return 'bg-warning';
+      return 'warning';
     case 'needs-attention':
-      return 'bg-destructive';
+      return 'destructive';
+    case 'user-managed':
+      return 'info';
     default:
-      return 'bg-muted-foreground/40';
+      return 'muted';
   }
+}
+
+function BotStatusBadge({ status }: { status?: BotStatus | string }) {
+  const map: Record<string, { tone: 'success' | 'warning' | 'destructive' | 'soft' | 'info'; icon: typeof CheckCircle2; label: string }> = {
+    online: { tone: 'success', icon: CheckCircle2, label: '在线' },
+    'awaiting-login': { tone: 'warning', icon: Loader2, label: '等待登录' },
+    'launching-qq': { tone: 'warning', icon: Loader2, label: '启动 QQ 中' },
+    reconnecting: { tone: 'warning', icon: Loader2, label: '重连中' },
+    'needs-attention': { tone: 'destructive', icon: AlertTriangle, label: '需要处理' },
+    'user-managed': { tone: 'info', icon: Hand, label: '用户托管' },
+    offline: { tone: 'soft', icon: CircleDashed, label: '离线' },
+  };
+  const entry = map[status ?? 'offline'] ?? map.offline!;
+  const Icon = entry.icon;
+  return (
+    <Badge variant={entry.tone}>
+      <Icon className={cn('size-3', (status === 'awaiting-login' || status === 'launching-qq' || status === 'reconnecting') && 'animate-spin')} />
+      {entry.label}
+    </Badge>
+  );
 }
 
 function RenameDialog({ bot, onClose, onRenamed }: { bot: BotRecord; onClose: () => void; onRenamed: () => void }) {
@@ -204,13 +386,20 @@ function RenameDialog({ bot, onClose, onRenamed }: { bot: BotRecord; onClose: ()
           <DialogTitle>{t('main.bots.rename')}</DialogTitle>
           <DialogDescription>{t('main.bots.renameHint')}</DialogDescription>
         </DialogHeader>
-        <Label htmlFor="rename-name">{t('main.bots.nameLabel')}</Label>
-        <Input id="rename-name" value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="space-y-2">
+          <Label htmlFor="rename-name">{t('main.bots.nameLabel')}</Label>
+          <Input
+            id="rename-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+        </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button onClick={() => rename.mutate({ uin: bot.uin, customName: name })}>
-            {t('common.save')}
+          <Button variant="ghost" onClick={onClose}>
+            {t('common.cancel')}
           </Button>
+          <Button onClick={() => rename.mutate({ uin: bot.uin, customName: name })}>{t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -238,18 +427,30 @@ function DeleteDialog({ bot, onClose }: { bot: BotRecord; onClose: () => void })
         </DialogHeader>
         <div className="space-y-3">
           <Label htmlFor="confirm-name">{t('main.bots.confirmNameLabel')}</Label>
-          <Input id="confirm-name" value={confirmName} onChange={(e) => setConfirmName(e.target.value)} placeholder={displayName} />
-          <div className="flex items-center gap-2">
+          <Input
+            id="confirm-name"
+            value={confirmName}
+            onChange={(e) => setConfirmName(e.target.value)}
+            placeholder={displayName}
+            autoFocus
+          />
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-3">
             <Checkbox id="with-data" checked={withData} onCheckedChange={(v) => setWithData(v === true)} />
-            <Label htmlFor="with-data">{t('main.bots.deleteWithData')}</Label>
+            <Label htmlFor="with-data" className="cursor-pointer text-sm text-foreground">
+              {t('main.bots.deleteWithData')}
+            </Label>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-3">
             <Checkbox id="with-config" checked={withConfig} onCheckedChange={(v) => setWithConfig(v === true)} />
-            <Label htmlFor="with-config">{t('main.bots.deleteWithConfig')}</Label>
+            <Label htmlFor="with-config" className="cursor-pointer text-sm text-foreground">
+              {t('main.bots.deleteWithConfig')}
+            </Label>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button variant="ghost" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
           <Button
             variant="destructive"
             disabled={!confirmed || stage.isPending}
@@ -287,9 +488,9 @@ function ImportOrphans() {
   const orphans = trpc.bot.import.findOrphans.useQuery();
   if (!orphans.data || orphans.data.length === 0) return null;
   return (
-    <div className="border-t border-border bg-card/30 px-3 py-2 text-xs">
-      <div className="flex items-center gap-1 text-muted-foreground">
-        <Search className="size-3" />
+    <div className="border-t border-sidebar-border bg-warning/5 px-3 py-2 text-xs">
+      <div className="flex items-center gap-1.5 text-warning">
+        <AlertTriangle className="size-3.5" />
         {t('main.bots.orphansFound', { count: orphans.data.length })}
       </div>
     </div>

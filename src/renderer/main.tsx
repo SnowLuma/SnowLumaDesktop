@@ -1,3 +1,7 @@
+// MUST be first import: installs window.electronTRPC mock when `?preview=1`
+// is set, before tRPC clients (which access it at construction time) load.
+import './preview/mock-electron-trpc';
+
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
