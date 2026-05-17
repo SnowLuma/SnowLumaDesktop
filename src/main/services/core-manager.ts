@@ -122,9 +122,24 @@ export class CoreManager extends EventEmitter {
     this.setStatus('starting', { activeVersion, webuiPort: port, pid: null });
     this.intentionalStop = false;
 
-    const nodeBin = resolveNodeBinary();
-    log.info(`spawning core: ${nodeBin} ${entry} cwd=${runtimeDir} port=${port}`);
-    const child = spawn(nodeBin, [entry], {
+    const runtime = resolveNodeRuntime();
+    // When we fall back to Electron's executable as the JS runtime, we
+    // MUST set ELECTRON_RUN_AS_NODE=1. Otherwise spawning
+    // SnowLumaDesktop.exe just relaunches the Desktop app, which then
+    // hits the single-instance lock and exits. The core-manager's
+    // crash-recover loop then re-spawns every 5s — exactly the
+    // "another instance already running; exiting" flood the user saw.
+    if (runtime.kind === 'electron-as-node') {
+      env['ELECTRON_RUN_AS_NODE'] = '1';
+      // Defensive: clear vars Electron looks at for window/security
+      // surface so the spawned process really behaves like plain Node.
+      delete env['ELECTRON_NO_ATTACH_CONSOLE'];
+    }
+
+    log.info(
+      `spawning core: runtime=${runtime.kind} bin=${runtime.bin} entry=${entry} cwd=${runtimeDir} port=${port}`,
+    );
+    const child = spawn(runtime.bin, [entry], {
       cwd: runtimeDir,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -274,12 +289,28 @@ async function resolveEntry(versionDir: string): Promise<string | null> {
   return null;
 }
 
+interface NodeRuntime {
+  bin: string;
+  kind: 'bundled-node' | 'system-node' | 'electron-as-node';
+}
+
 /**
- * Locate the bundled Node binary shipped under `resources/node/<platform>/`
- * (Phase 5 will populate this), falling back to the running Electron's Node
- * for development.
+ * Locate a JS runtime to spawn core under.
+ *
+ * Preference order:
+ *   1. `resources/node/<platform>-<arch>/node[.exe]` (or `resources/node/node[.exe]`):
+ *      a real Node binary we may ship inside the asar resources dir.
+ *   2. `node[.exe]` on PATH: only used in dev / when the user has Node
+ *      installed system-wide. Safe to always probe — `spawn` will throw
+ *      ENOENT and we fall through.
+ *   3. Electron's own executable (`process.execPath`) with
+ *      `ELECTRON_RUN_AS_NODE=1`. This is the documented Electron escape
+ *      hatch for "run a JS script using Electron's bundled Node without
+ *      starting the app." The caller MUST set the env var; otherwise on
+ *      Windows the .exe re-launches the Desktop and hits the
+ *      single-instance lock.
  */
-function resolveNodeBinary(): string {
+function resolveNodeRuntime(): NodeRuntime {
   const platform = process.platform;
   const arch = process.arch;
   const exe = platform === 'win32' ? 'node.exe' : 'node';
@@ -288,12 +319,17 @@ function resolveNodeBinary(): string {
     join(process.resourcesPath, 'node', exe),
   ];
   for (const candidate of resourceCandidates) {
-    if (existsSync(candidate)) return candidate;
+    if (existsSync(candidate)) return { bin: candidate, kind: 'bundled-node' };
   }
-  if (app.isPackaged) {
-    log.warn('bundled Node binary not found in resources/; falling back to Electron Node');
+  if (!app.isPackaged) {
+    // In dev, the user typically has node on PATH. Spawn it by bare name
+    // so the OS resolves via PATH.
+    return { bin: exe, kind: 'system-node' };
   }
-  return process.execPath;
+  log.warn(
+    'bundled Node binary not found in resources/; falling back to Electron with ELECTRON_RUN_AS_NODE=1',
+  );
+  return { bin: process.execPath, kind: 'electron-as-node' };
 }
 
 /**
