@@ -37,14 +37,25 @@ const indexRoute = createRoute({
   path: '/',
   beforeLoad: async () => {
     try {
-      const { completedAt } = await trpcVanilla.wizard.state.query();
-      throw redirect({ to: completedAt ? '/app/bots' : '/wizard/welcome' });
+      const state = await trpcVanilla.wizard.state.query();
+      const target = state.completedAt ? '/app/bots' : '/wizard/welcome';
+      // eslint-disable-next-line no-console
+      console.info(`[router] indexRoute resolved wizard.state → completedAt=${state.completedAt} → ${target}`);
+      throw redirect({ to: target });
     } catch (err) {
-      // Redirects throw — let them through. Anything else routes to bots
-      // so a broken tRPC bridge doesn't trap the user on a blank index.
+      // Redirects throw — let them through.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if ((err as any)?.isRedirect) throw err;
-      throw redirect({ to: '/app/bots' });
+      // Unknown state on first launch → wizard is the safer default.
+      // The user can always skip from there if they're an existing
+      // installer doing a fresh portable run.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[router] indexRoute failed wizard.state query, defaulting to wizard. err=${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      throw redirect({ to: '/wizard/welcome' });
     }
   },
   component: () => <Navigate to="/wizard/welcome" />,

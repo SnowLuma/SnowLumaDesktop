@@ -69,8 +69,28 @@ async function bootstrap(): Promise<void> {
     optimizer.watchWindowShortcuts(window);
   });
 
-  // Phase 1: window first, so even if any later service crashes the
-  // user still sees a UI to recover with.
+  // Phase 1: services + IPC bridge FIRST.
+  // The renderer fires its first tRPC call from the router's beforeLoad
+  // basically as soon as the React tree mounts. If `attachTrpcBridge`
+  // hasn't registered the ipcMain handler by then, the invoke fails
+  // with "No handler registered" and the router falls back — which
+  // looks like "skips the wizard" to the user.
+  let services: ReturnType<typeof initServices>;
+  try {
+    services = initServices();
+  } catch (err) {
+    log.error(`initServices threw: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  try {
+    attachTrpcBridge([]);
+  } catch (err) {
+    log.error(`attachTrpcBridge threw: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Phase 2: only NOW open the window. The renderer's first IPC call
+  // will land on a registered handler.
   const startHidden = wasLaunchedHidden();
   log.info(`wasLaunchedHidden=${startHidden} argv=${JSON.stringify(process.argv)}`);
 
@@ -84,22 +104,6 @@ async function bootstrap(): Promise<void> {
     );
     app.exit(1);
     return;
-  }
-
-  // Phase 2: services + IPC bridge. Each is wrapped so one failure
-  // doesn't abort the rest.
-  let services: ReturnType<typeof initServices>;
-  try {
-    services = initServices();
-  } catch (err) {
-    log.error(`initServices threw: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-
-  try {
-    attachTrpcBridge([mainWindow]);
-  } catch (err) {
-    log.error(`attachTrpcBridge threw: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   // 11c · close-to-tray: hide instead of destroy on user X-click.
