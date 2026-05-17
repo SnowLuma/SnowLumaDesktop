@@ -14,6 +14,16 @@ export const SNOWLUMA_IPC_CHANNEL = 'snowluma:trpc';
  * renderer subscribes via `window.snowlumaIpc.onEvent(...)`.
  */
 export const SNOWLUMA_EVENT_CHANNEL = 'snowluma:event';
+/**
+ * Fire-and-forget command channel for our custom titlebar. The
+ * renderer triggers window controls (minimize / maximize / close) via
+ * `ipcRenderer.send(...)`. We deliberately don't expose
+ * `BrowserWindow` to the renderer; preload narrows this to a small
+ * union.
+ */
+export const SNOWLUMA_WINDOW_CMD_CHANNEL = 'snowluma:window-cmd';
+
+export type SnowlumaWindowCmd = 'minimize' | 'toggle-maximize' | 'close';
 
 export interface IpcTrpcRequest {
   path: string;
@@ -61,6 +71,11 @@ export type SnowlumaPushEvent =
       kind: 'download:error';
       id: string;
       message: string;
+    }
+  | {
+      kind: 'window:state';
+      maximized: boolean;
+      focused: boolean;
     };
 
 declare global {
@@ -68,6 +83,9 @@ declare global {
     snowlumaIpc: {
       request(req: IpcTrpcRequest): Promise<IpcTrpcResponse>;
       onEvent(listener: (event: SnowlumaPushEvent) => void): () => void;
+      window: {
+        send(cmd: SnowlumaWindowCmd): void;
+      };
     };
   }
 }

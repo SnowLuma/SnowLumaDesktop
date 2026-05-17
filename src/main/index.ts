@@ -8,7 +8,14 @@ import { createLogger } from './util/logger';
 import { initServices } from './services';
 import { applyAutostartPreference, wasLaunchedHidden } from './services/autostart';
 import { cleanupOldTrash } from './services/bot-manager';
-import { getStore } from './store/store';
+
+// Force the process name BEFORE app.whenReady so Task Manager shows
+// "SnowLumaDesktop" instead of the generic "Electron" / "snowluma-desktop"
+// the npm package name would give us. `app.setName` also feeds into
+// `app.getPath('userData')` etc — keep it identical to the productName
+// in electron-builder.yml so userData paths don't shift between dev and
+// packaged runs.
+app.setName('SnowLumaDesktop');
 
 const log = createLogger('main');
 
@@ -95,33 +102,37 @@ async function bootstrap(): Promise<void> {
   log.info(`wasLaunchedHidden=${startHidden} argv=${JSON.stringify(process.argv)}`);
 
   try {
-    mainWindow = createMainWindow({ startHidden });
+    mainWindow = createMainWindow({
+      startHidden,
+      // Custom titlebar's close button routes through this. We hide-to-
+      // tray silently — the titlebar tooltip already tells the user
+      // what's happening, so the native popup we used to show here is
+      // gone. Tray right-click → 退出 is still the way to actually quit.
+      onCloseRequest: (win) => {
+        if (isQuitting) {
+          win.close();
+        } else {
+          win.hide();
+        }
+      },
+    });
   } catch (err) {
     log.error(`createMainWindow threw: ${err instanceof Error ? err.message : String(err)}`);
     await dialog.showErrorBox(
-      'SnowLuma 启动失败',
+      'SnowLumaDesktop 启动失败',
       `无法创建主窗口：${err instanceof Error ? err.message : String(err)}`,
     );
     app.exit(1);
     return;
   }
 
-  // 11c · close-to-tray: hide instead of destroy on user X-click.
-  mainWindow.on('close', async (event) => {
+  // Keep the OS-level close (Alt-F4, taskbar right-click → close) doing
+  // the same hide-to-tray dance. `isQuitting` is flipped to true by the
+  // tray's "退出" menu and by `before-quit`.
+  mainWindow.on('close', (event) => {
     if (isQuitting) return;
     event.preventDefault();
     mainWindow?.hide();
-    const store = getStore();
-    if (!store.get('trayHintShown')) {
-      store.set('trayHintShown', true);
-      await dialog.showMessageBox({
-        type: 'info',
-        title: 'SnowLuma 仍在后台运行',
-        message: '关闭主窗口不会真正退出 SnowLuma。',
-        detail: '右键托盘 → "退出" 可彻底停止所有 Bot 和 core 进程。',
-        buttons: ['好的'],
-      });
-    }
   });
 
   // Phase 3: tray. Failing to build the tray must NOT kill the window.
@@ -137,7 +148,7 @@ async function bootstrap(): Promise<void> {
         }
         const choice = await dialog.showMessageBox({
           type: 'warning',
-          title: '退出 SnowLuma Desktop',
+          title: '退出 SnowLumaDesktop',
           message: `当前有 ${onlineCount} 个 Bot 在线`,
           detail: '退出会停止所有 Bot 与 QQ 进程。确定继续吗？',
           buttons: ['取消', '全部停止并退出'],

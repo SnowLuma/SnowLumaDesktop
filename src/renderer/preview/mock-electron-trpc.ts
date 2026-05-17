@@ -189,6 +189,15 @@ export function installPreviewMock(): void {
       void _listener;
       return () => {};
     },
+    // Custom titlebar window controls. In browser preview the
+    // window-control commands don't go anywhere — log and move on so
+    // the bar still renders without erroring.
+    window: {
+      send(cmd: string): void {
+        // eslint-disable-next-line no-console
+        console.info(`[preview] window cmd ignored: ${cmd}`);
+      },
+    },
   };
 }
 

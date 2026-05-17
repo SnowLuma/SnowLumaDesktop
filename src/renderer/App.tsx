@@ -5,6 +5,7 @@ import { TooltipProvider } from '@snowluma/ui';
 import { trpc } from './lib/trpc';
 import { router } from './router';
 import { applyTheme } from './lib/theme';
+import { Titlebar } from './components/titlebar';
 
 export function App() {
   const { i18n } = useTranslation();
@@ -30,7 +31,17 @@ export function App() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <RouterProvider router={router} />
+      {/**
+       * Custom titlebar sits above the router so it persists across
+       * route changes and during route transitions / error states.
+       * Routes render in the flex-1 region below.
+       */}
+      <div className="flex h-screen flex-col overflow-hidden">
+        <Titlebar />
+        <div className="relative min-h-0 flex-1">
+          <RouterProvider router={router} />
+        </div>
+      </div>
     </TooltipProvider>
   );
 }

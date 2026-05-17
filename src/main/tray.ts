@@ -19,7 +19,7 @@ interface TrayDeps {
 export function createTray(deps: TrayDeps): Tray {
   if (tray) return tray;
   tray = new Tray(nativeImage.createEmpty());
-  tray.setToolTip('SnowLuma Desktop');
+  tray.setToolTip('SnowLumaDesktop');
   rebuildMenu(deps);
 
   tray.on('double-click', () => {

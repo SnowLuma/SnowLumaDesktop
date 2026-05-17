@@ -1,6 +1,10 @@
-## Placeholder. Phase 5 will fill in code-signing-free NSIS + portable zip.
 appId: org.snowluma.desktop
-productName: SnowLuma Desktop
+# productName drives: window title, NSIS shortcut name, executable file
+# name (SnowLumaDesktop.exe), and what shows up in Task Manager's
+# "Apps" column. Keep it as a single token (no space) so the .exe and
+# Task Manager entry both read `SnowLumaDesktop`.
+productName: SnowLumaDesktop
+executableName: SnowLumaDesktop
 copyright: SnowLuma Project
 directories:
   output: release
@@ -11,6 +15,10 @@ files:
 asarUnpack:
   - resources/**
 win:
+  # electron-builder auto-generates the .ico from this PNG (must be
+  # ≥256×256). The 300×300 we copied from packages/webui/public/logo.png
+  # qualifies.
+  icon: build/icon.png
   target:
     - target: nsis
       arch:
@@ -24,7 +32,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   perMachine: false
   artifactName: ${productName}-Setup-${version}.${ext}
-  shortcutName: SnowLuma Desktop
+  shortcutName: SnowLumaDesktop
   deleteAppDataOnUninstall: false
 portable:
   artifactName: ${productName}-Portable-${version}.${ext}

@@ -53,7 +53,7 @@ export function MainShell() {
   }, [setUserCollapsed]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+    <div className="flex h-full overflow-hidden bg-background text-foreground">
       <aside
         className={cn(
           'relative flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out',

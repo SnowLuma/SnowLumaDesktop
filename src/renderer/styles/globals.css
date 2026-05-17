@@ -31,4 +31,17 @@
 @layer utilities {
   .h-chrome { height: var(--chrome-height); }
   .min-h-chrome { min-height: var(--chrome-height); }
+  /**
+   * Frameless-window helpers. The titlebar bar gets `app-region-drag`
+   * so the user can grab anywhere on it to move the window; inline
+   * controls (buttons) re-opt-out with `app-region-no-drag` so clicks
+   * register normally.
+   */
+  .app-region-drag {
+    -webkit-app-region: drag;
+  }
+  .app-region-no-drag {
+    -webkit-app-region: no-drag;
+  }
+  .h-titlebar { height: var(--titlebar-height, 2rem); }
 }

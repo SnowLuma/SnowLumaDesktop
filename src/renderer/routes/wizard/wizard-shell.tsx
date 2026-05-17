@@ -50,7 +50,7 @@ export function WizardShell() {
   const progress = Math.round(((currentIndex + 1) / STEP_ORDER.length) * 100);
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col bg-background text-foreground">
       <header className="flex h-chrome shrink-0 items-center gap-3 border-b border-border bg-card px-5">
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
           <Snowflake className="size-4" />

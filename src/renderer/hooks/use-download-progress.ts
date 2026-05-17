@@ -42,6 +42,11 @@ export function useDownloadProgress(id: string | null, active: boolean): Downloa
     const bridge = globalThis.window?.snowlumaIpc;
     if (!bridge?.onEvent) return;
     const dispose = bridge.onEvent((event: SnowlumaPushEvent) => {
+      // Only download:* events carry an `id` field. Anything else
+      // (window:state, future kinds) is irrelevant to this hook.
+      if (event.kind !== 'download:progress' && event.kind !== 'download:done' && event.kind !== 'download:error') {
+        return;
+      }
       if (event.id !== id) return;
       if (event.kind === 'download:progress') {
         setState({
