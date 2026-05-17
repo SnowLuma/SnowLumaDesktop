@@ -1,24 +1,11 @@
 /**
- * Browser-only stub for the Electron preload's `window.electronTRPC` bridge.
- * Lets you load the renderer in a regular browser (no Electron) to look at
- * the UI. Activated by `?preview=1`.
+ * Browser-only stub for `window.snowlumaIpc`. Lets us load the renderer
+ * in a regular browser (no Electron preload) to look at the UI.
+ * Activated by `?preview=1` and sticky via sessionStorage so internal
+ * redirects don't drop preview state.
  */
+import type { IpcTrpcRequest, IpcTrpcResponse } from '@shared/ipc-protocol';
 
-interface PreviewMessage {
-  id: number;
-  result: { type: 'data'; data: unknown };
-}
-
-interface PreviewListener {
-  (msg: PreviewMessage): void;
-}
-
-const listeners: PreviewListener[] = [];
-
-// Mutable preview state — lets a mutation actually update what the next
-// query returns. Without this, e.g. clicking the theme toggle would
-// invalidate `app.prefs.get`, which would re-fetch the same hardcoded
-// value and the UI would never change.
 const previewState: {
   prefs: {
     theme: 'light' | 'dark' | 'system';
@@ -27,7 +14,6 @@ const previewState: {
     autostartOpenMainWindow: boolean;
     trayHintShown: boolean;
   };
-  bots: Record<string, unknown>;
   updateChannel: 'main' | 'dev';
   mirrors: Array<{ id: string; name: string; template: string; priority: number; enabled: boolean }>;
 } = {
@@ -38,7 +24,6 @@ const previewState: {
     autostartOpenMainWindow: false,
     trayHintShown: false,
   },
-  bots: {},
   updateChannel: 'main',
   mirrors: [
     {
@@ -67,8 +52,8 @@ function mockResponse(path: string, input?: unknown): unknown {
         name: 'SnowLumaDesktop',
         version: '1.8.1',
         electron: '35.7.5',
-        chrome: '128.0.0.0',
-        node: '22.0.0',
+        chrome: '134.0.0.0',
+        node: '22.16.0',
         platform: 'win32',
         arch: 'x64',
         isPackaged: false,
@@ -185,29 +170,22 @@ function mockResponse(path: string, input?: unknown): unknown {
 
 export function installPreviewMock(): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).electronTRPC = {
-    sendMessage(envelope: { method: string; operation?: { id: number; path: string; input?: unknown } }) {
-      if (envelope.method !== 'request' || !envelope.operation) return;
-      const op = envelope.operation;
-      const data = mockResponse(op.path, op.input);
-      setTimeout(() => {
-        const msg: PreviewMessage = {
-          id: op.id,
-          result: { type: 'data', data },
+  (globalThis as any).snowlumaIpc = {
+    async request(req: IpcTrpcRequest): Promise<IpcTrpcResponse> {
+      await new Promise((r) => setTimeout(r, 8));
+      try {
+        const data = mockResponse(req.path, req.input);
+        return { ok: true, data };
+      } catch (err) {
+        return {
+          ok: false,
+          error: { message: err instanceof Error ? err.message : String(err), code: 'INTERNAL_SERVER_ERROR' },
         };
-        for (const cb of listeners) cb(msg);
-      }, 12);
-    },
-    onMessage(cb: PreviewListener) {
-      listeners.push(cb);
+      }
     },
   };
 }
 
-// Auto-install when imported as a side-effect at the top of main.tsx and
-// either `?preview=1` is in the URL OR a previous load on this tab already
-// activated preview mode (sticky sessionStorage flag, so the router can
-// redirect without dragging the query string along).
 if (typeof window !== 'undefined') {
   const url = new URLSearchParams(window.location.search);
   const sticky = window.sessionStorage?.getItem('sl-preview') === '1';
