@@ -56,12 +56,14 @@ export const DEFAULT_STORE: DesktopStoreSchema = {
   botOrder: [],
   activeCoreVersion: null,
   updateChannel: 'main',
+  // Priority: smaller wins. 0 = first tried, larger = fallback. The
+  // built-in GitHub mirror starts at 0 so a clean install defaults to it.
   mirrors: [
     {
       id: 'github',
       name: 'GitHub Releases',
       template: 'https://github.com/SnowLuma/SnowLuma/releases/download/{version}/{file}',
-      priority: 100,
+      priority: 0,
       enabled: true,
     },
   ],

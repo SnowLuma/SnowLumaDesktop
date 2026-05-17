@@ -29,6 +29,7 @@ const previewState: {
   };
   bots: Record<string, unknown>;
   updateChannel: 'main' | 'dev';
+  mirrors: Array<{ id: string; name: string; template: string; priority: number; enabled: boolean }>;
 } = {
   prefs: {
     theme: 'system',
@@ -39,6 +40,22 @@ const previewState: {
   },
   bots: {},
   updateChannel: 'main',
+  mirrors: [
+    {
+      id: 'github',
+      name: 'GitHub Releases',
+      template: 'https://github.com/SnowLuma/SnowLuma/releases/download/{version}/{file}',
+      priority: 0,
+      enabled: true,
+    },
+    {
+      id: 'mirror-jsdelivr',
+      name: 'jsDelivr 镜像',
+      template: 'https://cdn.jsdelivr.net/gh/SnowLuma/SnowLuma@{version}/{file}',
+      priority: 50,
+      enabled: false,
+    },
+  ],
 };
 
 function mockResponse(path: string, input?: unknown): unknown {
@@ -62,22 +79,19 @@ function mockResponse(path: string, input?: unknown): unknown {
       Object.assign(previewState.prefs, (input ?? {}) as object);
       return undefined;
     case 'mirrors.list':
-      return [
-        {
-          id: 'github',
-          name: 'GitHub Releases',
-          template: 'https://github.com/SnowLuma/SnowLuma/releases/download/{version}/{file}',
-          priority: 100,
-          enabled: true,
-        },
-        {
-          id: 'mirror-jsdelivr',
-          name: 'jsDelivr 镜像',
-          template: 'https://cdn.jsdelivr.net/gh/SnowLuma/SnowLuma@{version}/{file}',
-          priority: 80,
-          enabled: false,
-        },
-      ];
+      return previewState.mirrors;
+    case 'mirrors.upsert': {
+      const m = input as { id: string; name: string; template: string; priority: number; enabled: boolean };
+      const i = previewState.mirrors.findIndex((x) => x.id === m.id);
+      if (i >= 0) previewState.mirrors[i] = { ...m };
+      else previewState.mirrors.push({ ...m });
+      return m;
+    }
+    case 'mirrors.delete': {
+      const id = (input as { id: string }).id;
+      previewState.mirrors = previewState.mirrors.filter((m) => m.id !== id);
+      return undefined;
+    }
     case 'av.detect':
       return {
         defender: { status: 'running', realtimeProtection: true, amServiceEnabled: true },

@@ -36,12 +36,15 @@ export const mirrorsRouter = router({
   reorder: publicProcedure
     .input(z.object({ orderedIds: z.array(z.string()) }))
     .mutation(({ ctx, input }) => {
+      // Smaller priority = higher rank. The list ordering is just visual
+      // chrome; the canonical order is whatever the sort by priority asc
+      // produces. Index 0 in `orderedIds` gets priority 0, index N gets N.
       const map = new Map(ctx.store.get('mirrors').map((m) => [m.id, m]));
       const reordered: MirrorEntry[] = [];
       input.orderedIds.forEach((id, i) => {
         const entry = map.get(id);
         if (entry) {
-          reordered.push({ ...entry, priority: input.orderedIds.length - i });
+          reordered.push({ ...entry, priority: i });
           map.delete(id);
         }
       });

@@ -61,7 +61,8 @@ export async function downloadArtifact(
   mirrors: MirrorEntry[],
   opts: DownloadOptions,
 ): Promise<DownloadResult> {
-  const enabled = mirrors.filter((m) => m.enabled).slice().sort((a, b) => b.priority - a.priority);
+  // Priority semantics: smaller wins. 0 = highest priority, 999 = lowest.
+  const enabled = mirrors.filter((m) => m.enabled).slice().sort((a, b) => a.priority - b.priority);
   if (enabled.length === 0) {
     throw new DownloadError('no enabled mirrors configured', []);
   }

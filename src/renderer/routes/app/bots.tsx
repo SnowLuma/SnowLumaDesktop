@@ -25,6 +25,11 @@ import {
   TooltipContent,
   TooltipTrigger,
   Badge,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   cn,
 } from '@snowluma/ui';
 import {
@@ -36,7 +41,6 @@ import {
   RotateCw,
   Inbox,
   Bot as BotIcon,
-  Filter,
   PanelRightClose,
   PanelRightOpen,
   CheckCircle2,
@@ -44,6 +48,8 @@ import {
   Loader2,
   CircleDashed,
   Hand,
+  Search,
+  X,
 } from 'lucide-react';
 import { trpc } from '../../lib/trpc';
 import { trashEntriesAtom, botSidebarCollapsedAtom } from '../../state/atoms';
@@ -63,6 +69,8 @@ type BotStatus =
   | 'needs-attention'
   | 'user-managed';
 
+type BotFilter = 'all' | 'online' | 'offline' | 'attention' | 'user-managed';
+
 export function BotsView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -81,7 +89,8 @@ export function BotsView() {
   const [renameTarget, setRenameTarget] = useState<BotRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BotRecord | null>(null);
   const [userSidebarCollapsed, setSidebarCollapsed] = useAtom(botSidebarCollapsedAtom);
-  const [filter, setFilter] = useState<'all' | 'online' | 'offline'>('all');
+  const [filter, setFilter] = useState<BotFilter>('all');
+  const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const compact = useCompactViewport();
   // On compact viewports the bot list collapses automatically when a bot
@@ -90,9 +99,18 @@ export function BotsView() {
 
   const selectedRecord = bots.data?.find((b) => b.uin === routeUin) ?? bots.data?.[0];
   const filtered = bots.data?.filter((b) => {
-    if (filter === 'all') return true;
     const state = states.data?.find((s) => s.uin === b.uin);
-    return filter === 'online' ? state?.status === 'online' : state?.status !== 'online';
+    const status = state?.status ?? 'offline';
+    if (filter === 'online' && status !== 'online') return false;
+    if (filter === 'offline' && status === 'online') return false;
+    if (filter === 'attention' && status !== 'needs-attention') return false;
+    if (filter === 'user-managed' && status !== 'user-managed') return false;
+    const q = search.trim().toLowerCase();
+    if (q) {
+      const name = (b.customName || '').toLowerCase();
+      if (!name.includes(q) && !b.uin.includes(q)) return false;
+    }
+    return true;
   });
 
   return (
@@ -110,42 +128,57 @@ export function BotsView() {
               title={t('main.bots.title')}
               icon={<BotIcon className="size-4" />}
               actions={
-                <>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => {
-                          const next: typeof filter = filter === 'all' ? 'online' : filter === 'online' ? 'offline' : 'all';
-                          setFilter(next);
-                        }}
-                      >
-                        <Filter className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      过滤：{filter === 'all' ? '全部' : filter === 'online' ? '仅在线' : '仅离线'}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button size="icon-sm" variant="ghost" onClick={() => setAddOpen(true)}>
-                        <Plus className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">添加 Bot</TooltipContent>
-                  </Tooltip>
-                </>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="icon-sm" variant="ghost" onClick={() => setAddOpen(true)}>
+                      <Plus className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">添加 Bot</TooltipContent>
+                </Tooltip>
               }
             />
+            <div className="flex shrink-0 flex-col gap-2 border-b border-border bg-card/40 px-3 py-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="搜索名称 / UIN"
+                  className="h-8 pl-7 pr-7 text-xs"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="清空搜索"
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
+              </div>
+              <Select value={filter} onValueChange={(v) => setFilter(v as BotFilter)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部</SelectItem>
+                  <SelectItem value="online">仅在线</SelectItem>
+                  <SelectItem value="offline">仅离线 / 异常</SelectItem>
+                  <SelectItem value="attention">需要处理</SelectItem>
+                  <SelectItem value="user-managed">用户托管</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <ScrollArea className="flex-1">
               <ul className="space-y-0.5 p-2">
                 {filtered?.length === 0 && (
                   <EmptyState
                     className="my-4"
                     icon={<Inbox className="size-5" />}
-                    title={filter === 'all' ? t('main.bots.empty') : '无匹配 Bot'}
+                    title={filter === 'all' && !search ? t('main.bots.empty') : '无匹配 Bot'}
+                    description={search ? `没有匹配 "${search}" 的 Bot` : undefined}
                   />
                 )}
                 {filtered?.map((bot) => {
