@@ -49,6 +49,7 @@ import { trpc } from '../../lib/trpc';
 import { trashEntriesAtom, botSidebarCollapsedAtom } from '../../state/atoms';
 import type { BotRecord } from '@shared/types';
 import { ViewHeader } from './main-shell';
+import { AddBotDialog } from '../../components/add-bot-dialog';
 
 const UNDO_WINDOW_MS = 5_000;
 
@@ -80,6 +81,7 @@ export function BotsView() {
   const [deleteTarget, setDeleteTarget] = useState<BotRecord | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(botSidebarCollapsedAtom);
   const [filter, setFilter] = useState<'all' | 'online' | 'offline'>('all');
+  const [addOpen, setAddOpen] = useState(false);
 
   const selectedRecord = bots.data?.find((b) => b.uin === routeUin) ?? bots.data?.[0];
   const filtered = bots.data?.filter((b) => {
@@ -123,11 +125,7 @@ export function BotsView() {
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => navigate({ to: '/wizard/add-bot' })}
-                      >
+                      <Button size="icon-sm" variant="ghost" onClick={() => setAddOpen(true)}>
                         <Plus className="size-4" />
                       </Button>
                     </TooltipTrigger>
@@ -310,7 +308,7 @@ export function BotsView() {
                   </div>
                   <h2 className="text-base font-semibold">{t('main.bots.banner')}</h2>
                   <p className="text-sm text-muted-foreground">{t('main.bots.bannerHint')}</p>
-                  <Button onClick={() => navigate({ to: '/wizard/add-bot' })}>
+                  <Button onClick={() => setAddOpen(true)}>
                     <Plus className="size-4" />
                     {t('main.bots.addBot')}
                   </Button>
@@ -334,6 +332,11 @@ export function BotsView() {
       {deleteTarget && (
         <DeleteDialog bot={deleteTarget} onClose={() => setDeleteTarget(null)} />
       )}
+      <AddBotDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onAdded={(uin) => navigate({ to: '/app/bots/$uin', params: { uin } })}
+      />
     </div>
   );
 }

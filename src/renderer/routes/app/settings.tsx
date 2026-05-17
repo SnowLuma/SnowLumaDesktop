@@ -165,8 +165,10 @@ function CoreSettings() {
               <li
                 key={v}
                 className={cn(
-                  'flex items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2 transition-colors',
-                  isActive ? 'border-primary/40 ring-1 ring-primary/30' : 'border-border',
+                  'flex items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2 transition-[border-color,box-shadow,transform] duration-150 ease-out',
+                  isActive
+                    ? 'border-primary/40 ring-1 ring-primary/30'
+                    : 'border-border hover:border-border/60 hover:shadow-sm',
                 )}
               >
                 <div className="flex items-center gap-2 text-sm">
@@ -221,7 +223,7 @@ function MirrorSettings() {
           {list.data?.map((m) => (
             <li
               key={m.id}
-              className="rounded-xl border border-border bg-card p-4 transition-colors"
+              className="rounded-xl border border-border bg-card p-4 transition-[border-color,box-shadow,transform] duration-150 ease-out hover:border-border/60 hover:shadow-sm hover:-translate-y-px"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">

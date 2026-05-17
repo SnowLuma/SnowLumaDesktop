@@ -2,8 +2,15 @@
 @import "tw-animate-css";
 @import "@snowluma/ui/styles/theme.css";
 
-/* Scan @snowluma/ui sources for utility class usage. */
-@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+/**
+ * Scan @snowluma/ui sources for utility class usage. Walk via the
+ * pnpm-linked node_modules path — the relative path back to the main
+ * monorepo is fragile across local-dev / CI checkouts. The link target
+ * is always at `node_modules/@snowluma/ui` regardless of whether this
+ * is local dev (link:) or production install.
+ */
+@source "../../../node_modules/@snowluma/ui/src/**/*.{ts,tsx}";
+@source "../../../node_modules/@snowluma/ui/dist/**/*.js";
 
 @layer base {
   html, body, #root {
@@ -21,7 +28,6 @@
   }
 }
 
-/* App-level utilities used by chrome layouts. */
 @layer utilities {
   .h-chrome { height: var(--chrome-height); }
   .min-h-chrome { min-height: var(--chrome-height); }

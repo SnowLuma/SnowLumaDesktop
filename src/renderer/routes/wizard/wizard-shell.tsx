@@ -5,6 +5,7 @@ import { Button, cn, ScrollArea } from '@snowluma/ui';
 import { Snowflake, ChevronRight } from 'lucide-react';
 import { trpc } from '../../lib/trpc';
 import { ThemeToggle } from '../../components/theme-toggle';
+import { RouteTransition } from '../../components/route-transition';
 import type { WizardStep } from '@shared/types';
 
 const STEP_ORDER: { step: WizardStep; path: string; labelKey: string }[] = [
@@ -126,8 +127,10 @@ export function WizardShell() {
 
       <ScrollArea className="flex-1">
         <main className="px-6 py-8 lg:py-12">
-          <div className="mx-auto w-full max-w-2xl animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
-            <Outlet />
+          <div className="mx-auto w-full max-w-2xl">
+            <RouteTransition>
+              <Outlet />
+            </RouteTransition>
           </div>
         </main>
       </ScrollArea>

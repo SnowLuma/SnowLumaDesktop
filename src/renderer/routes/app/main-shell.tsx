@@ -15,6 +15,7 @@ import { trpc } from '../../lib/trpc';
 import { ToastBridge } from './toast-bridge';
 import { ThemeToggle } from '../../components/theme-toggle';
 import { SidebarToggle } from '../../components/sidebar-toggle';
+import { RouteTransition } from '../../components/route-transition';
 import { navSidebarCollapsedAtom } from '../../state/atoms';
 
 const NAV_ITEMS = [
@@ -168,7 +169,9 @@ export function MainShell() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Outlet />
+        <RouteTransition>
+          <Outlet />
+        </RouteTransition>
       </main>
       <ToastBridge />
     </div>
