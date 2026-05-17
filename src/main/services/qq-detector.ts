@@ -23,9 +23,12 @@ export interface QqInstall {
  *   2. Registry uninstall keys (`HKCU` + `HKLM` `Software\Tencent\QQNT`).
  *   3. PATH lookup.
  *
- * QQNT also ships its launcher binary inside a `versions/<x.y.z>/QQ.exe`
- * sub-tree alongside the top-level `QQ.exe`; the newest version wins so
- * we can report the right ProductVersion when both exist.
+ * QQNT layout: the launcher `QQ.exe` lives at the install root.
+ * Per-version resources sit under `versions/<x.y.z-build>/` (e.g.
+ * `versions/9.9.30-48517/`) — those folders hold assets only, NOT an
+ * executable. When that subdir exists, the highest-sorted folder name
+ * is the most reliable version we can get without invoking PowerShell
+ * to read PE resources.
  *
  * Returns the first hit; null when nothing found. Cross-platform stub
  * (macOS/Linux) returns null — Desktop targets win32-x64 only.
@@ -109,34 +112,30 @@ function legacyExeCandidates(): string[] {
 }
 
 /**
- * Walk a QQNT install root and pick the best `QQ.exe`. New QQNT
- * installs only have `versions/<x.y.z>/QQ.exe`; older ones have the
- * top-level `QQ.exe`. When multiple versions exist, the highest by
- * dotted-number comparison wins so detection matches "what QQ would
- * actually launch".
+ * Resolve a QQNT install root → `{ path: <root>\QQ.exe, version }`.
+ *
+ * `QQ.exe` is always at the root. Version identification preference:
+ *   1. The highest-sorted folder under `versions/` (e.g. `9.9.30-48517`).
+ *      Folder name doubles as the version string — same format the
+ *      QQNT launcher reports — and is cheaper than spawning PowerShell.
+ *   2. Falls back to reading the PE-resource ProductVersion of QQ.exe
+ *      when `versions/` is missing or empty.
  */
 async function probeQqNtRoot(root: string): Promise<QqInstall | null> {
   if (!existsSync(root)) return null;
+  const exePath = join(root, 'QQ.exe');
+  if (!existsSync(exePath)) return null;
 
+  let version: string | null = null;
   const versionsDir = join(root, 'versions');
   if (existsSync(versionsDir)) {
     const best = await pickBestVersion(versionsDir);
-    if (best) {
-      const exePath = join(versionsDir, best.name, 'QQ.exe');
-      if (existsSync(exePath)) {
-        const version = best.name || (await readVersion(exePath).catch(() => null));
-        return { path: exePath, version };
-      }
-    }
+    if (best) version = best.name;
   }
-
-  const topLevelExe = join(root, 'QQ.exe');
-  if (existsSync(topLevelExe)) {
-    const version = await readVersion(topLevelExe).catch(() => null);
-    return { path: topLevelExe, version };
+  if (!version) {
+    version = await readVersion(exePath).catch(() => null);
   }
-
-  return null;
+  return { path: exePath, version };
 }
 
 interface VersionFolder {
