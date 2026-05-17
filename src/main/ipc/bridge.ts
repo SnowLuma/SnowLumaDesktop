@@ -1,7 +1,13 @@
 import { ipcMain, type BrowserWindow } from 'electron';
 import { TRPCError } from '@trpc/server';
+// tRPC v11's official dispatcher: takes a router + path + ctx and runs
+// the matching procedure end-to-end (middleware, input parsing, output
+// serialisation). Lives under the `unstable-core-do-not-import` entry,
+// which is the maintainers' way of saying "this is internal but
+// publicly exported for exactly these glue cases" — pinning to it is
+// fine and survives v11 patch bumps.
+import { callProcedure } from '@trpc/server/unstable-core-do-not-import';
 import { appRouter } from '../trpc/router';
-import { createCallerFactory } from '../trpc/init';
 import { createContext } from '../trpc/context';
 import { createLogger } from '../util/logger';
 import {
@@ -13,47 +19,47 @@ import {
 const log = createLogger('ipc');
 
 /**
- * Minimal tRPC-over-IPC bridge written specifically against tRPC v11.
+ * tRPC-over-IPC bridge for tRPC v11.
  *
- * Why not electron-trpc: 0.7.1 was built for tRPC v10's router shape
- * (`getErrorShape` on the router, different `_def` layout). Loading our
- * v11 router through it explodes at first request with
- * `n.getErrorShape is not a function`.
- *
- * Wire format (see `@shared/ipc-protocol`):
- *   renderer ipcRenderer.invoke(CHANNEL, { path, type, input })
- *     → main calls the procedure via the v11 caller factory
- *     → returns `{ ok: true, data }` or `{ ok: false, error: {...} }`
- *
- * Subscriptions are not yet supported (we don't use any) — the type
- * field is preserved in the request so we can add them later by
- * negotiating a per-subscription channel.
+ * Why callProcedure (not createCaller + path walk): in v11, the caller
+ * returned by `createCallerFactory(router)(ctx)` is a Proxy whose
+ * nested children resolve at access time. Manually walking the path
+ * with `caller.app.prefs.get` returns undefined for nested routers
+ * (the "procedure not found: app.prefs.get" bug we just hit).
+ * `callProcedure` is the canonical dispatcher used internally by every
+ * official adapter (http, ws, fetch) and looks up the procedure on
+ * `router._def.procedures` (the flat dotted record).
  */
-const callerFactory = createCallerFactory(appRouter);
-
 export function attachTrpcBridge(_windows: BrowserWindow[]): void {
-  // `BrowserWindow[]` arg kept for API parity; we use ipcMain.handle
-  // which routes per-event regardless of window count.
-  void _windows;
+  void _windows; // kept for API parity; ipcMain.handle routes per-event
   ipcMain.removeHandler(SNOWLUMA_IPC_CHANNEL);
   ipcMain.handle(SNOWLUMA_IPC_CHANNEL, async (_event, raw: unknown): Promise<IpcTrpcResponse> => {
     if (!isRequest(raw)) {
-      return errorResponse(new TRPCError({ code: 'BAD_REQUEST', message: 'invalid ipc request shape' }), '');
+      return errorResponse(
+        new TRPCError({ code: 'BAD_REQUEST', message: 'invalid ipc request shape' }),
+        '',
+      );
     }
     const req = raw;
     if (req.type === 'subscription') {
       return errorResponse(
-        new TRPCError({ code: 'METHOD_NOT_SUPPORTED', message: 'subscriptions are not yet wired in IPC' }),
+        new TRPCError({
+          code: 'METHOD_NOT_SUPPORTED',
+          message: 'subscriptions are not yet wired in IPC',
+        }),
         req.path,
       );
     }
     try {
-      const caller = callerFactory(createContext()) as Record<string, unknown>;
-      const fn = walkPath(caller, req.path);
-      if (typeof fn !== 'function') {
-        throw new TRPCError({ code: 'NOT_FOUND', message: `procedure not found: ${req.path}` });
-      }
-      const data = await (fn as (input: unknown) => unknown | Promise<unknown>)(req.input);
+      const data = await callProcedure({
+        router: appRouter,
+        path: req.path,
+        getRawInput: async () => req.input,
+        ctx: createContext(),
+        type: req.type,
+        signal: undefined,
+        batchIndex: 0,
+      });
       return { ok: true, data };
     } catch (err) {
       return errorResponse(err, req.path);
@@ -65,17 +71,10 @@ export function attachTrpcBridge(_windows: BrowserWindow[]): void {
 function isRequest(value: unknown): value is IpcTrpcRequest {
   if (!value || typeof value !== 'object') return false;
   const v = value as Partial<IpcTrpcRequest>;
-  return typeof v.path === 'string' && (v.type === 'query' || v.type === 'mutation' || v.type === 'subscription');
-}
-
-/** Walk a dotted procedure path: 'app.prefs.get' -> caller.app.prefs.get. */
-function walkPath(root: Record<string, unknown>, path: string): unknown {
-  return path.split('.').reduce<unknown>((cursor, segment) => {
-    if (cursor && typeof cursor === 'object' && segment in cursor) {
-      return (cursor as Record<string, unknown>)[segment];
-    }
-    return undefined;
-  }, root);
+  return (
+    typeof v.path === 'string' &&
+    (v.type === 'query' || v.type === 'mutation' || v.type === 'subscription')
+  );
 }
 
 function errorResponse(err: unknown, path: string): IpcTrpcResponse {
