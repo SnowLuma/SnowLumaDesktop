@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Dialog,
@@ -13,49 +13,97 @@ import {
   Badge,
   Switch,
   Progress,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   cn,
 } from '@snowluma/ui';
-import { Download, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Download, Loader2, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { useDownloadProgress, formatBytes, formatSpeed } from '../hooks/use-download-progress';
+import { relativeTime } from '../lib/format';
 
 interface CoreDownloadDialogProps {
   open: boolean;
   onClose: () => void;
 }
 
-// SnowLuma core release artifacts ship as `SnowLuma-v<version>-win-x64.zip`
-// on GitHub Releases. `{version}` gets replaced with the unprefixed
-// number, so this resolves to e.g. `SnowLuma-v1.8.1-win-x64.zip`.
-const DEFAULT_FILE_TEMPLATE = 'SnowLuma-v{version}-win-x64.zip';
+const FALLBACK_FILE_TEMPLATE = 'SnowLuma-v{version}-win-x64.zip';
+
+// Pick the Windows zip artifact out of a release's asset list. The
+// canonical name is `SnowLuma-v<version>-win-x64.zip` but we match
+// case-insensitively and tolerate small future variations.
+function pickWinAsset(assets: { name: string }[]): string | null {
+  const explicit = assets.find((a) => /win[-_]?x?64.*\.zip$/i.test(a.name));
+  if (explicit) return explicit.name;
+  const looseZip = assets.find((a) => a.name.toLowerCase().endsWith('.zip'));
+  return looseZip?.name ?? null;
+}
 
 /**
- * Download + (optionally) activate a core version. Replaces the
- * "inline version + file inputs" we had in the wizard.
+ * Download + (optionally) activate a core version.
+ *
+ * The version field is a dropdown populated from the SnowLuma GitHub
+ * releases list (newest first, latest non-prerelease selected by
+ * default). The file template is auto-derived from the chosen
+ * release's win-x64 asset but stays user-editable for edge cases.
  */
 export function CoreDownloadDialog({ open, onClose }: CoreDownloadDialogProps) {
   const utils = trpc.useUtils();
   const versions = trpc.core.versions.list.useQuery();
+  const remote = trpc.core.versions.remote.useQuery(undefined, {
+    enabled: open,
+    refetchOnWindowFocus: false,
+  });
   const download = trpc.core.versions.download.useMutation();
   const switchVersion = trpc.core.versions.switch.useMutation();
 
-  const [version, setVersion] = useState('');
-  const [file, setFile] = useState(DEFAULT_FILE_TEMPLATE);
+  const [tag, setTag] = useState('');
+  const [file, setFile] = useState(FALLBACK_FILE_TEMPLATE);
   const [activateAfter, setActivateAfter] = useState(true);
 
-  const trimmedVersion = version.trim().replace(/^v/, '');
-  const valid = trimmedVersion.length > 0 && /^\d+\.\d+\.\d+/.test(trimmedVersion);
-  const tag = trimmedVersion ? `v${trimmedVersion}` : '';
-  const alreadyInstalled = !!trimmedVersion && versions.data?.installed.includes(tag);
+  // Default the dropdown to the latest non-prerelease as soon as the
+  // remote list resolves. We only set it on first arrival so manual
+  // selections aren't stomped by a background refetch.
+  useEffect(() => {
+    if (!remote.data || tag) return;
+    const fallback = remote.data.releases[0]?.tag;
+    const next = remote.data.latestTag ?? fallback;
+    if (next) setTag(next);
+  }, [remote.data, tag]);
+
+  // When the user picks a version, auto-populate the file field from
+  // the matching release's win-x64 asset. They can still override.
+  useEffect(() => {
+    if (!remote.data || !tag) return;
+    const release = remote.data.releases.find((r) => r.tag === tag);
+    if (!release) return;
+    const auto = pickWinAsset(release.assets);
+    if (auto) {
+      setFile(auto);
+    } else {
+      // No asset on this release — fall back to the conventional name
+      // pattern with the bare version interpolated.
+      const bare = tag.replace(/^v/, '');
+      setFile(`SnowLuma-v${bare}-win-x64.zip`);
+    }
+  }, [tag, remote.data]);
+
+  const alreadyInstalled = !!tag && versions.data?.installed.includes(tag);
+  const selectedRelease = useMemo(
+    () => remote.data?.releases.find((r) => r.tag === tag),
+    [remote.data, tag],
+  );
   // Subscribe to push events for this exact core version so we get
   // real-time progress without polling — see `useDownloadProgress`.
   const progress = useDownloadProgress(tag ? `core:${tag}` : null, download.isPending || download.isSuccess);
 
   function handleDownload() {
-    if (!valid) return;
-    const resolvedFile = file.replace(/\{version\}/g, trimmedVersion);
+    if (!tag || !file) return;
     download.mutate(
-      { version: tag, file: resolvedFile },
+      { version: tag, file },
       {
         onSuccess: async () => {
           await utils.core.versions.list.invalidate();
@@ -87,7 +135,7 @@ export function CoreDownloadDialog({ open, onClose }: CoreDownloadDialogProps) {
             <div className="min-w-0 flex-1">
               <DialogTitle>下载 core 版本</DialogTitle>
               <DialogDescription className="mt-1">
-                从已启用的下载源拉取并解压到本地。
+                从 GitHub 拉取并解压到本地，按已启用的下载源顺序回退。
               </DialogDescription>
             </div>
           </div>
@@ -97,25 +145,71 @@ export function CoreDownloadDialog({ open, onClose }: CoreDownloadDialogProps) {
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="core-version">版本号</Label>
-            <Input
-              id="core-version"
-              value={version}
-              onChange={(e) => setVersion(e.target.value)}
-              placeholder="1.8.1"
-              autoFocus
-              className="font-mono"
-            />
+            <div className="flex items-center justify-between">
+              <Label htmlFor="core-version">选择版本</Label>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => remote.refetch()}
+                disabled={remote.isFetching}
+                className="h-6 px-2 text-[11px]"
+              >
+                <RefreshCw className={cn('size-3', remote.isFetching && 'animate-spin')} />
+                刷新
+              </Button>
+            </div>
+            <Select value={tag} onValueChange={setTag} disabled={remote.isFetching || !remote.data?.releases.length}>
+              <SelectTrigger id="core-version" className="font-mono">
+                <SelectValue placeholder={remote.isFetching ? '正在获取版本列表…' : '选择一个版本'} />
+              </SelectTrigger>
+              <SelectContent>
+                {remote.data?.releases.map((r) => (
+                  <SelectItem key={r.tag} value={r.tag}>
+                    <span className="font-mono">{r.tag}</span>
+                    {r.tag === remote.data?.latestTag && (
+                      <Badge variant="success" className="ml-2 px-1.5 py-0 text-[9px]">
+                        latest
+                      </Badge>
+                    )}
+                    {r.prerelease && (
+                      <Badge variant="warning" className="ml-2 px-1.5 py-0 text-[9px]">
+                        pre
+                      </Badge>
+                    )}
+                    {r.publishedAt && (
+                      <span className="ml-2 text-[10px] text-muted-foreground">
+                        {relativeTime(r.publishedAt)}
+                      </span>
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {remote.error && (
+              <p className="flex items-center gap-1.5 text-[11px] text-warning">
+                <AlertTriangle className="size-3.5" />
+                获取版本列表失败：{remote.error.message}
+              </p>
+            )}
+            {remote.data && 'error' in remote.data && remote.data.error && (
+              <p className="flex items-center gap-1.5 text-[11px] text-warning">
+                <AlertTriangle className="size-3.5" />
+                {remote.data.error}
+              </p>
+            )}
             {alreadyInstalled && (
               <p className="flex items-center gap-1.5 text-[11px] text-warning">
                 <AlertTriangle className="size-3.5" />
-                v{trimmedVersion} 已安装，下载会覆盖。
+                {tag} 已安装，下载会覆盖。
               </p>
+            )}
+            {selectedRelease?.name && (
+              <p className="text-[10px] text-muted-foreground">{selectedRelease.name}</p>
             )}
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="core-file">文件名模板</Label>
+            <Label htmlFor="core-file">文件名</Label>
             <Input
               id="core-file"
               value={file}
@@ -123,7 +217,7 @@ export function CoreDownloadDialog({ open, onClose }: CoreDownloadDialogProps) {
               className="font-mono"
             />
             <p className="text-[11px] text-muted-foreground">
-              <code className="rounded bg-muted px-1 py-px font-mono text-[10px]">{'{version}'}</code> 会被替换成版本号。
+              已根据所选版本自动填好。若 release 中文件名不同，可手动修改。
             </p>
           </div>
 
@@ -141,7 +235,7 @@ export function CoreDownloadDialog({ open, onClose }: CoreDownloadDialogProps) {
             <DownloadProgressBlock percent={percent} progress={progress} />
           )}
           {download.isSuccess && !download.isPending && (
-            <PhaseRow tone="success" icon={<CheckCircle2 className="size-4" />} title="下载完成" body={`已写入到本地版本目录 · v${trimmedVersion}`} />
+            <PhaseRow tone="success" icon={<CheckCircle2 className="size-4" />} title="下载完成" body={`已写入到本地版本目录 · ${tag}`} />
           )}
           {download.error && (
             <PhaseRow tone="destructive" icon={<AlertTriangle className="size-4" />} title="下载失败" body={download.error.message} />
@@ -153,7 +247,7 @@ export function CoreDownloadDialog({ open, onClose }: CoreDownloadDialogProps) {
             {download.isSuccess ? '完成' : '取消'}
           </Button>
           {!download.isSuccess && (
-            <Button onClick={handleDownload} disabled={!valid || download.isPending}>
+            <Button onClick={handleDownload} disabled={!tag || !file || download.isPending}>
               <Download className="size-4" />
               开始下载
             </Button>
@@ -214,5 +308,3 @@ function PhaseRow({ tone, icon, title, body }: { tone: 'success' | 'warning' | '
     </div>
   );
 }
-
-void Badge;

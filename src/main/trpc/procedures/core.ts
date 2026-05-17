@@ -7,6 +7,10 @@ import { coreVersionsDir } from '../../util/paths';
 import { downloadAndExtract } from '../../services/download-manager';
 import { loginWebui, waitForCoreReady } from '../../services/webui-session';
 import { broadcastEvent } from '../../ipc/event-bus';
+import { listReleases } from '../../services/github-api';
+
+const CORE_OWNER = 'SnowLuma';
+const CORE_REPO = 'SnowLuma';
 
 export const coreRouter = router({
   state: publicProcedure.query(({ ctx }) => ctx.services.core.getState()),
@@ -49,6 +53,44 @@ export const coreRouter = router({
       installed: ctx.store.get('installedCoreVersions'),
       active: ctx.store.get('activeCoreVersion'),
     })),
+
+    /**
+     * Pull the list of downloadable core versions from the SnowLuma
+     * GitHub releases. The CoreDownloadDialog uses this to show a
+     * date-sorted dropdown so the user picks instead of guessing.
+     * Returns most-recent-first. Latest non-prerelease is flagged so
+     * the UI can default the selection to it.
+     */
+    remote: publicProcedure.query(async () => {
+      try {
+        const releases = await listReleases(CORE_OWNER, CORE_REPO);
+        const usable = releases.filter((r) => !r.draft);
+        usable.sort((a, b) => {
+          const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+          const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+          return tb - ta;
+        });
+        // The "latest" tag (= what GitHub puts on /releases/latest)
+        // is the most recent non-prerelease, non-draft.
+        const latestTag = usable.find((r) => !r.prerelease)?.tagName ?? null;
+        return {
+          releases: usable.map((r) => ({
+            tag: r.tagName,
+            name: r.name,
+            prerelease: r.prerelease,
+            publishedAt: r.publishedAt,
+            assets: r.assets.map((a) => ({ name: a.name, size: a.size })),
+          })),
+          latestTag,
+        };
+      } catch (err) {
+        return {
+          releases: [],
+          latestTag: null,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }),
 
     download: publicProcedure
       .input(

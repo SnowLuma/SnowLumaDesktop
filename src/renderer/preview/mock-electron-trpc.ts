@@ -93,6 +93,33 @@ function mockResponse(path: string, input?: unknown): unknown {
       return { kind: 'unknown', warn: false };
     case 'core.versions.list':
       return { installed: ['v1.8.1'], active: 'v1.8.1' };
+    case 'core.versions.remote':
+      return {
+        releases: [
+          {
+            tag: 'v1.9.0',
+            name: 'SnowLuma v1.9.0',
+            prerelease: false,
+            publishedAt: new Date(Date.now() - 86400_000).toISOString(),
+            assets: [{ name: 'SnowLuma-v1.9.0-win-x64.zip', size: 90_000_000 }],
+          },
+          {
+            tag: 'v1.8.1',
+            name: 'SnowLuma v1.8.1',
+            prerelease: false,
+            publishedAt: new Date(Date.now() - 7 * 86400_000).toISOString(),
+            assets: [{ name: 'SnowLuma-v1.8.1-win-x64.zip', size: 88_000_000 }],
+          },
+          {
+            tag: 'nightly-abc1234',
+            name: 'SnowLuma nightly 1.9.0-dev.abc1234',
+            prerelease: true,
+            publishedAt: new Date(Date.now() - 3600_000).toISOString(),
+            assets: [{ name: 'SnowLuma-v1.9.0-dev.abc1234-win-x64.zip', size: 91_000_000 }],
+          },
+        ],
+        latestTag: 'v1.9.0',
+      };
     case 'core.state':
       return {
         status: 'running',
@@ -162,6 +189,7 @@ function mockResponse(path: string, input?: unknown): unknown {
         latestVersion: '1.9.0',
         releaseNotes: '- fix(bridge): correctness pass on highway\n- feat(ui): new diagnostic export',
         releaseDate: new Date().toISOString(),
+        downloadUrl: 'https://github.com/SnowLuma/SnowLumaDesktop/releases/latest',
       };
     default:
       return null;

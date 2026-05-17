@@ -1,16 +1,39 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, CardContent, Input, Label, Progress } from '@snowluma/ui';
-import { Download, RotateCcw, Loader2 } from 'lucide-react';
+import {
+  Button,
+  Card,
+  CardContent,
+  Input,
+  Label,
+  Progress,
+  Badge,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  cn,
+} from '@snowluma/ui';
+import { Download, RotateCcw, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { trpc } from '../../lib/trpc';
 import { useWizardNavigate } from './wizard-shell';
 import { useDownloadProgress, formatBytes, formatSpeed } from '../../hooks/use-download-progress';
+import { relativeTime } from '../../lib/format';
+
+function pickWinAsset(assets: { name: string }[]): string | null {
+  const explicit = assets.find((a) => /win[-_]?x?64.*\.zip$/i.test(a.name));
+  if (explicit) return explicit.name;
+  const looseZip = assets.find((a) => a.name.toLowerCase().endsWith('.zip'));
+  return looseZip?.name ?? null;
+}
 
 export function CoreDownloadStep() {
   const { t } = useTranslation();
   const { next, back } = useWizardNavigate();
   const utils = trpc.useUtils();
   const versions = trpc.core.versions.list.useQuery();
+  const remote = trpc.core.versions.remote.useQuery(undefined, { refetchOnWindowFocus: false });
   const switchVersion = trpc.core.versions.switch.useMutation({
     onSuccess: () => void utils.core.versions.list.invalidate(),
   });
@@ -20,14 +43,31 @@ export function CoreDownloadStep() {
     },
   });
 
-  const [version, setVersion] = useState('1.8.1');
-  // SnowLuma core release artifact naming: `SnowLuma-v<version>-win-x64.zip`.
+  const [tag, setTag] = useState('');
   const [file, setFile] = useState('SnowLuma-v{version}-win-x64.zip');
+
+  // Auto-select latest non-prerelease as soon as the list arrives.
+  useEffect(() => {
+    if (!remote.data || tag) return;
+    const next = remote.data.latestTag ?? remote.data.releases[0]?.tag;
+    if (next) setTag(next);
+  }, [remote.data, tag]);
+
+  // Update file template based on chosen release's win-x64 asset.
+  useEffect(() => {
+    if (!remote.data || !tag) return;
+    const release = remote.data.releases.find((r) => r.tag === tag);
+    if (!release) return;
+    const auto = pickWinAsset(release.assets);
+    if (auto) setFile(auto);
+    else {
+      const bare = tag.replace(/^v/, '');
+      setFile(`SnowLuma-v${bare}-win-x64.zip`);
+    }
+  }, [tag, remote.data]);
 
   const installed = versions.data?.installed ?? [];
   const active = versions.data?.active ?? null;
-  const trimmedVersion = version.replace(/^v/, '');
-  const tag = trimmedVersion ? `v${trimmedVersion}` : '';
   const progress = useDownloadProgress(
     tag ? `core:${tag}` : null,
     download.isPending || download.isSuccess,
@@ -46,23 +86,71 @@ export function CoreDownloadStep() {
 
       <Card>
         <CardContent className="space-y-4 p-6">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="version">{t('wizard.coreDownload.versionLabel')}</Label>
-              <Input id="version" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.8.1" />
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="version">选择版本</Label>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => remote.refetch()}
+                disabled={remote.isFetching}
+                className="h-6 px-2 text-[11px]"
+              >
+                <RefreshCw className={cn('size-3', remote.isFetching && 'animate-spin')} />
+                刷新
+              </Button>
             </div>
-            <div>
-              <Label htmlFor="file">{t('wizard.coreDownload.fileLabel')}</Label>
-              <Input id="file" value={file} onChange={(e) => setFile(e.target.value)} />
-            </div>
+            <Select value={tag} onValueChange={setTag} disabled={remote.isFetching || !remote.data?.releases.length}>
+              <SelectTrigger id="version" className="font-mono">
+                <SelectValue placeholder={remote.isFetching ? '正在获取版本列表…' : '选择一个版本'} />
+              </SelectTrigger>
+              <SelectContent>
+                {remote.data?.releases.map((r) => (
+                  <SelectItem key={r.tag} value={r.tag}>
+                    <span className="font-mono">{r.tag}</span>
+                    {r.tag === remote.data?.latestTag && (
+                      <Badge variant="success" className="ml-2 px-1.5 py-0 text-[9px]">
+                        latest
+                      </Badge>
+                    )}
+                    {r.prerelease && (
+                      <Badge variant="warning" className="ml-2 px-1.5 py-0 text-[9px]">
+                        pre
+                      </Badge>
+                    )}
+                    {r.publishedAt && (
+                      <span className="ml-2 text-[10px] text-muted-foreground">
+                        {relativeTime(r.publishedAt)}
+                      </span>
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {remote.error && (
+              <p className="flex items-center gap-1.5 text-[11px] text-warning">
+                <AlertTriangle className="size-3.5" />
+                获取版本列表失败：{remote.error.message}
+              </p>
+            )}
+            {remote.data && 'error' in remote.data && remote.data.error && (
+              <p className="flex items-center gap-1.5 text-[11px] text-warning">
+                <AlertTriangle className="size-3.5" />
+                {remote.data.error}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="file">{t('wizard.coreDownload.fileLabel')}</Label>
+            <Input id="file" value={file} onChange={(e) => setFile(e.target.value)} className="font-mono" />
           </div>
           <div className="flex items-center gap-2">
             <Button
               onClick={() => {
-                const resolvedFile = file.replace(/\{version\}/g, trimmedVersion);
-                download.mutate({ version: tag, file: resolvedFile });
+                if (!tag) return;
+                download.mutate({ version: tag, file });
               }}
-              disabled={download.isPending || !version || !file}
+              disabled={download.isPending || !tag || !file}
             >
               <Download className="size-4" />
               {download.isPending ? t('wizard.coreDownload.downloading') : t('wizard.coreDownload.download')}
