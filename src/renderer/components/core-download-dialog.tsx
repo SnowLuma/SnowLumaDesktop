@@ -12,17 +12,22 @@ import {
   Separator,
   Badge,
   Switch,
+  Progress,
   cn,
 } from '@snowluma/ui';
 import { Download, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import { useDownloadProgress, formatBytes, formatSpeed } from '../hooks/use-download-progress';
 
 interface CoreDownloadDialogProps {
   open: boolean;
   onClose: () => void;
 }
 
-const DEFAULT_FILE_TEMPLATE = 'snowluma-core-{version}-win32-x64.zip';
+// SnowLuma core release artifacts ship as `SnowLuma-v<version>-win-x64.zip`
+// on GitHub Releases. `{version}` gets replaced with the unprefixed
+// number, so this resolves to e.g. `SnowLuma-v1.8.1-win-x64.zip`.
+const DEFAULT_FILE_TEMPLATE = 'SnowLuma-v{version}-win-x64.zip';
 
 /**
  * Download + (optionally) activate a core version. Replaces the
@@ -40,11 +45,14 @@ export function CoreDownloadDialog({ open, onClose }: CoreDownloadDialogProps) {
 
   const trimmedVersion = version.trim().replace(/^v/, '');
   const valid = trimmedVersion.length > 0 && /^\d+\.\d+\.\d+/.test(trimmedVersion);
-  const alreadyInstalled = !!trimmedVersion && versions.data?.installed.includes(`v${trimmedVersion}`);
+  const tag = trimmedVersion ? `v${trimmedVersion}` : '';
+  const alreadyInstalled = !!trimmedVersion && versions.data?.installed.includes(tag);
+  // Subscribe to push events for this exact core version so we get
+  // real-time progress without polling — see `useDownloadProgress`.
+  const progress = useDownloadProgress(tag ? `core:${tag}` : null, download.isPending || download.isSuccess);
 
   function handleDownload() {
     if (!valid) return;
-    const tag = `v${trimmedVersion}`;
     const resolvedFile = file.replace(/\{version\}/g, trimmedVersion);
     download.mutate(
       { version: tag, file: resolvedFile },
@@ -62,6 +70,11 @@ export function CoreDownloadDialog({ open, onClose }: CoreDownloadDialogProps) {
   function handleClose() {
     if (!download.isPending) onClose();
   }
+
+  const percent =
+    progress.bytesTotal && progress.bytesTotal > 0
+      ? Math.min(100, Math.round((progress.bytesDone / progress.bytesTotal) * 100))
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
@@ -125,7 +138,7 @@ export function CoreDownloadDialog({ open, onClose }: CoreDownloadDialogProps) {
           </div>
 
           {download.isPending && (
-            <PhaseRow tone="warning" icon={<Loader2 className="size-4 animate-spin" />} title="下载中…" body="正在从下载源拉取并校验 SHA256。" />
+            <DownloadProgressBlock percent={percent} progress={progress} />
           )}
           {download.isSuccess && !download.isPending && (
             <PhaseRow tone="success" icon={<CheckCircle2 className="size-4" />} title="下载完成" body={`已写入到本地版本目录 · v${trimmedVersion}`} />
@@ -148,6 +161,38 @@ export function CoreDownloadDialog({ open, onClose }: CoreDownloadDialogProps) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DownloadProgressBlock({
+  percent,
+  progress,
+}: {
+  percent: number | null;
+  progress: ReturnType<typeof useDownloadProgress>;
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-warning">
+      <div className="flex items-center gap-2 font-medium text-foreground">
+        <Loader2 className="size-4 animate-spin text-warning" />
+        正在下载…
+        {progress.mirrorId && (
+          <span className="ml-auto text-[10px] font-normal text-muted-foreground">
+            来源：{progress.mirrorId}
+            {progress.attempt > 1 && ` · 尝试 #${progress.attempt}`}
+          </span>
+        )}
+      </div>
+      <Progress value={percent ?? undefined} indeterminate={percent === null} />
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+        <span className="font-mono">
+          {formatBytes(progress.bytesDone)}
+          {progress.bytesTotal !== null && ` / ${formatBytes(progress.bytesTotal)}`}
+          {percent !== null && `  ·  ${percent}%`}
+        </span>
+        <span className="font-mono">{formatSpeed(progress.speedBytesPerSec) || '准备中…'}</span>
+      </div>
+    </div>
   );
 }
 

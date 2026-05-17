@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, CardContent, Input, Label, Progress } from '@snowluma/ui';
-import { Download, RotateCcw } from 'lucide-react';
+import { Download, RotateCcw, Loader2 } from 'lucide-react';
 import { trpc } from '../../lib/trpc';
 import { useWizardNavigate } from './wizard-shell';
+import { useDownloadProgress, formatBytes, formatSpeed } from '../../hooks/use-download-progress';
 
 export function CoreDownloadStep() {
   const { t } = useTranslation();
@@ -20,10 +21,21 @@ export function CoreDownloadStep() {
   });
 
   const [version, setVersion] = useState('1.8.1');
-  const [file, setFile] = useState('snowluma-core-{version}-win32-x64.zip');
+  // SnowLuma core release artifact naming: `SnowLuma-v<version>-win-x64.zip`.
+  const [file, setFile] = useState('SnowLuma-v{version}-win-x64.zip');
 
   const installed = versions.data?.installed ?? [];
   const active = versions.data?.active ?? null;
+  const trimmedVersion = version.replace(/^v/, '');
+  const tag = trimmedVersion ? `v${trimmedVersion}` : '';
+  const progress = useDownloadProgress(
+    tag ? `core:${tag}` : null,
+    download.isPending || download.isSuccess,
+  );
+  const percent =
+    progress.bytesTotal && progress.bytesTotal > 0
+      ? Math.min(100, Math.round((progress.bytesDone / progress.bytesTotal) * 100))
+      : null;
 
   return (
     <section className="space-y-6">
@@ -47,8 +59,8 @@ export function CoreDownloadStep() {
           <div className="flex items-center gap-2">
             <Button
               onClick={() => {
-                const resolvedFile = file.replace(/\{version\}/g, version);
-                download.mutate({ version: `v${version.replace(/^v/, '')}`, file: resolvedFile });
+                const resolvedFile = file.replace(/\{version\}/g, trimmedVersion);
+                download.mutate({ version: tag, file: resolvedFile });
               }}
               disabled={download.isPending || !version || !file}
             >
@@ -59,7 +71,29 @@ export function CoreDownloadStep() {
               <span className="text-xs text-destructive">{download.error.message}</span>
             )}
           </div>
-          {download.isPending && <Progress value={50} />}
+          {download.isPending && (
+            <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
+              <div className="flex items-center gap-2 font-medium text-foreground">
+                <Loader2 className="size-4 animate-spin text-warning" />
+                {t('wizard.coreDownload.downloading')}
+                {progress.mirrorId && (
+                  <span className="ml-auto text-[10px] font-normal text-muted-foreground">
+                    {progress.mirrorId}
+                    {progress.attempt > 1 && ` · #${progress.attempt}`}
+                  </span>
+                )}
+              </div>
+              <Progress value={percent ?? undefined} indeterminate={percent === null} />
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <span className="font-mono">
+                  {formatBytes(progress.bytesDone)}
+                  {progress.bytesTotal !== null && ` / ${formatBytes(progress.bytesTotal)}`}
+                  {percent !== null && `  ·  ${percent}%`}
+                </span>
+                <span className="font-mono">{formatSpeed(progress.speedBytesPerSec) || '准备中…'}</span>
+              </div>
+            </div>
+          )}
 
           <hr className="border-border" />
 

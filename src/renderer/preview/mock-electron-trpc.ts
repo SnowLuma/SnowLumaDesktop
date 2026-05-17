@@ -183,6 +183,12 @@ export function installPreviewMock(): void {
         };
       }
     },
+    // Browser preview never receives real push events — return a noop
+    // unsubscribe to keep `useDownloadProgress` happy.
+    onEvent(_listener: (event: unknown) => void): () => void {
+      void _listener;
+      return () => {};
+    },
   };
 }
 

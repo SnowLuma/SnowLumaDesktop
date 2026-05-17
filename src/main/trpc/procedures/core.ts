@@ -6,6 +6,7 @@ import { publicProcedure, router } from '../init';
 import { coreVersionsDir } from '../../util/paths';
 import { downloadAndExtract } from '../../services/download-manager';
 import { loginWebui, waitForCoreReady } from '../../services/webui-session';
+import { broadcastEvent } from '../../ipc/event-bus';
 
 export const coreRouter = router({
   state: publicProcedure.query(({ ctx }) => ctx.services.core.getState()),
@@ -59,17 +60,39 @@ export const coreRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const versionDir = join(coreVersionsDir(), input.version);
-        const result = await downloadAndExtract(ctx.store.get('mirrors'), {
-          version: input.version,
-          file: input.file,
-          destDir: join(versionDir, '_download'),
-          expectedSha256: input.expectedSha256,
-          extractTo: versionDir,
-        });
-        const installed = new Set(ctx.store.get('installedCoreVersions'));
-        installed.add(input.version);
-        ctx.store.set('installedCoreVersions', Array.from(installed));
-        return result;
+        const eventId = `core:${input.version}`;
+        try {
+          const result = await downloadAndExtract(ctx.store.get('mirrors'), {
+            version: input.version,
+            file: input.file,
+            destDir: join(versionDir, '_download'),
+            expectedSha256: input.expectedSha256,
+            extractTo: versionDir,
+            onProgress: (p) => {
+              broadcastEvent({
+                kind: 'download:progress',
+                id: eventId,
+                bytesDone: p.bytesDone,
+                bytesTotal: p.bytesTotal,
+                speedBytesPerSec: p.speedBytesPerSec,
+                mirrorId: p.mirrorId,
+                attempt: p.attempt,
+              });
+            },
+          });
+          broadcastEvent({ kind: 'download:done', id: eventId, bytesTotal: result.bytesTotal });
+          const installed = new Set(ctx.store.get('installedCoreVersions'));
+          installed.add(input.version);
+          ctx.store.set('installedCoreVersions', Array.from(installed));
+          return result;
+        } catch (err) {
+          broadcastEvent({
+            kind: 'download:error',
+            id: eventId,
+            message: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        }
       }),
 
     switch: publicProcedure
