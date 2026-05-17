@@ -2,8 +2,21 @@ import { z } from 'zod';
 import { publicProcedure, router } from '../init';
 import type { BotRecord } from '@shared/types';
 
+// UIN accepts either:
+//   - A real 5-12 digit QQ number, OR
+//   - A `pending-<timestamp>` placeholder used by the add-bot flow
+//     before the user has logged in (we don't know the real UIN yet;
+//     core's bridge reconciles it once login completes).
+// Without the placeholder branch the wizard / dialog "Start" button
+// silently failed with a Zod regex error and the user couldn't make
+// progress (the bug they reported as "点启动没有反应" / the regex
+// validation error in the main UI).
+const uinSchema = z.string().regex(/^(?:\d{5,12}|pending-\d+)$/, {
+  message: 'uin must be 5-12 digits or a `pending-<timestamp>` placeholder',
+});
+
 const botRecordSchema = z.object({
-  uin: z.string().regex(/^\d{5,12}$/),
+  uin: uinSchema,
   customName: z.string().default(''),
   qqPath: z.string().min(1),
   launchMode: z.enum(['desktop', 'user']),
