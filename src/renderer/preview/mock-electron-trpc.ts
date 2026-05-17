@@ -15,7 +15,33 @@ interface PreviewListener {
 
 const listeners: PreviewListener[] = [];
 
-function mockResponse(path: string, _input?: unknown): unknown {
+// Mutable preview state — lets a mutation actually update what the next
+// query returns. Without this, e.g. clicking the theme toggle would
+// invalidate `app.prefs.get`, which would re-fetch the same hardcoded
+// value and the UI would never change.
+const previewState: {
+  prefs: {
+    theme: 'light' | 'dark' | 'system';
+    language: 'zh-CN' | 'en-US';
+    autostartEnabled: boolean;
+    autostartOpenMainWindow: boolean;
+    trayHintShown: boolean;
+  };
+  bots: Record<string, unknown>;
+  updateChannel: 'main' | 'dev';
+} = {
+  prefs: {
+    theme: 'system',
+    language: 'zh-CN',
+    autostartEnabled: false,
+    autostartOpenMainWindow: false,
+    trayHintShown: false,
+  },
+  bots: {},
+  updateChannel: 'main',
+};
+
+function mockResponse(path: string, input?: unknown): unknown {
   switch (path) {
     case 'wizard.state':
       return { step: 'welcome', completedAt: null };
@@ -31,13 +57,10 @@ function mockResponse(path: string, _input?: unknown): unknown {
         isPackaged: false,
       };
     case 'app.prefs.get':
-      return {
-        theme: 'system',
-        language: 'zh-CN',
-        autostartEnabled: false,
-        autostartOpenMainWindow: false,
-        trayHintShown: false,
-      };
+      return { ...previewState.prefs };
+    case 'app.prefs.set':
+      Object.assign(previewState.prefs, (input ?? {}) as object);
+      return undefined;
     case 'mirrors.list':
       return [
         {
@@ -128,7 +151,10 @@ function mockResponse(path: string, _input?: unknown): unknown {
     case 'bot.import.findOrphans':
       return [];
     case 'updater.channel':
-      return 'main';
+      return previewState.updateChannel;
+    case 'updater.setChannel':
+      previewState.updateChannel = ((input as { channel?: 'main' | 'dev' })?.channel ?? 'main');
+      return undefined;
     case 'updater.check':
       return {
         available: true,

@@ -17,6 +17,7 @@ import { ThemeToggle } from '../../components/theme-toggle';
 import { SidebarToggle } from '../../components/sidebar-toggle';
 import { RouteTransition } from '../../components/route-transition';
 import { navSidebarCollapsedAtom } from '../../state/atoms';
+import { useCompactViewport } from '../../hooks/use-media-query';
 
 const NAV_ITEMS = [
   { to: '/app/bots', labelKey: 'main.nav.bots', icon: Bot },
@@ -32,19 +33,24 @@ export function MainShell() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const appInfo = trpc.app.info.useQuery();
   const coreState = trpc.core.state.useQuery(undefined, { refetchInterval: 2_000 });
-  const [collapsed, setCollapsed] = useAtom(navSidebarCollapsedAtom);
+  const [userCollapsed, setUserCollapsed] = useAtom(navSidebarCollapsedAtom);
+  const compact = useCompactViewport(); // < md (768px) auto-collapse
 
-  // ⌘B / Ctrl+B toggle.
+  // At small widths force-collapse regardless of user preference; otherwise
+  // honour the persisted toggle.
+  const collapsed = compact || userCollapsed;
+
+  // ⌘B / Ctrl+B toggle (only meaningful outside compact mode).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
-        setCollapsed((v) => !v);
+        setUserCollapsed((v) => !v);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [setCollapsed]);
+  }, [setUserCollapsed]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
@@ -71,7 +77,7 @@ export function MainShell() {
               </div>
             </div>
           )}
-          {!collapsed && <SidebarToggle collapsed={false} onToggle={() => setCollapsed(true)} />}
+          {!collapsed && !compact && <SidebarToggle collapsed={false} onToggle={() => setUserCollapsed(true)} />}
         </header>
 
         <nav className="flex-1 overflow-hidden p-2">
@@ -119,21 +125,16 @@ export function MainShell() {
             collapsed && 'justify-center px-2',
           )}
         >
-          {collapsed ? (
+          {collapsed && !compact ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setCollapsed(false)}
-                  className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent/40 hover:text-foreground"
-                  aria-label="展开侧栏"
-                >
-                  <SidebarToggle collapsed onToggle={() => setCollapsed(false)} />
-                </button>
+                <span>
+                  <SidebarToggle collapsed onToggle={() => setUserCollapsed(false)} />
+                </span>
               </TooltipTrigger>
               <TooltipContent side="right">展开侧栏</TooltipContent>
             </Tooltip>
-          ) : (
+          ) : compact ? null : (
             <>
               <Tooltip>
                 <TooltipTrigger asChild>

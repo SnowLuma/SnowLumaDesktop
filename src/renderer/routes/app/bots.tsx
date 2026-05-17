@@ -50,6 +50,7 @@ import { trashEntriesAtom, botSidebarCollapsedAtom } from '../../state/atoms';
 import type { BotRecord } from '@shared/types';
 import { ViewHeader } from './main-shell';
 import { AddBotDialog } from '../../components/add-bot-dialog';
+import { useCompactViewport } from '../../hooks/use-media-query';
 
 const UNDO_WINDOW_MS = 5_000;
 
@@ -79,9 +80,13 @@ export function BotsView() {
 
   const [renameTarget, setRenameTarget] = useState<BotRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BotRecord | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useAtom(botSidebarCollapsedAtom);
+  const [userSidebarCollapsed, setSidebarCollapsed] = useAtom(botSidebarCollapsedAtom);
   const [filter, setFilter] = useState<'all' | 'online' | 'offline'>('all');
   const [addOpen, setAddOpen] = useState(false);
+  const compact = useCompactViewport();
+  // On compact viewports the bot list collapses automatically when a bot
+  // is open (mobile master-detail pattern).
+  const sidebarCollapsed = (compact && !!routeUin) || userSidebarCollapsed;
 
   const selectedRecord = bots.data?.find((b) => b.uin === routeUin) ?? bots.data?.[0];
   const filtered = bots.data?.filter((b) => {

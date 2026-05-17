@@ -9,6 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   EmptyState,
+  toast,
   cn,
 } from '@snowluma/ui';
 import { FolderOpen, RotateCw, FileText, Search, Filter, Pause, Play } from 'lucide-react';
@@ -123,7 +124,15 @@ export function LogsView() {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon-sm" variant="ghost" onClick={() => alert(t('main.logs.openFolderHint'))}>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() =>
+                    toast.info(t('main.logs.openFolder'), {
+                      description: t('main.logs.openFolderHint'),
+                    })
+                  }
+                >
                   <FolderOpen className="size-4" />
                 </Button>
               </TooltipTrigger>
